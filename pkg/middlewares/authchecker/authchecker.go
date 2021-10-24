@@ -26,6 +26,6 @@ func (h Handler) CheckAuth(next http.Handler) http.Handler {
 			userID, _ = h.s.UserByToken(token.Value)
 		}
 
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ht.CtxUserIsAuth, userID)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), "ctxUserAuthID", userID)))
 	})
 }
