@@ -118,10 +118,7 @@ func (s *Pg) Register(u user.User) error {
 
 // HasAuth search user in storage
 func (s *Pg) HasAuth(u user.User) bool {
-	if s.rowExists(sqlGetUser, u.Login, u.HexPassword()) {
-		return true
-	}
-	return false
+	return s.rowExists(sqlGetUser, u.Login, u.HexPassword())
 }
 
 // SetToken update token to user
@@ -158,11 +155,7 @@ func (s *Pg) PutOrder(id int, code int) error {
 
 // HasOrder check order exist
 func (s *Pg) HasOrder(userID int, code int) bool {
-	if s.rowExists(sqlGetCode, userID, code) {
-		return true
-	}
-
-	return false
+	return s.rowExists(sqlGetCode, userID, code)
 }
 
 // SetStatus update status to order by code

@@ -113,6 +113,7 @@ func (c *Checker) Push(userID int, orderCode int) error {
 		if err != nil {
 			return err
 		}
+		defer resp.Body.Close()
 
 		switch resp.StatusCode {
 		// to many connects strategy

@@ -27,7 +27,7 @@ var ErrNotAuth = errors.New("not auth")
 const CookieUserIDName = "user_id"
 
 // CtxUserIsAuth define context name
-const CtxUserIsAuth = "ctx_user_is_auth"
+var CtxUserIsAuth = "ctx_user_is_auth"
 
 // ParseJSONReq parse JSON request and convert to struct by point
 func ParseJSONReq(r *http.Request, s interface{}) error {
@@ -65,11 +65,11 @@ func IsValidOrder(r *http.Request) (int, error) {
 	if r.Body == http.NoBody {
 		return 0, ErrBadRequest
 	}
-	orderId, err := ioutil.ReadAll(r.Body)
+	orderID, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return 0, ErrBadRequest
 	}
-	id, err := strconv.Atoi(string(orderId))
+	id, err := strconv.Atoi(string(orderID))
 	if err != nil {
 		return id, ErrBadRequest
 	}
