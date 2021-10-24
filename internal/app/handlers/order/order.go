@@ -24,7 +24,7 @@ func New(l *zap.Logger, s pg.Storage, c checker.Executor) *Handler {
 
 // Register order
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("ctxUserAuthID")
+	userID := r.Context().Value(ht.CtxUserIsAuth)
 
 	if userID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)
