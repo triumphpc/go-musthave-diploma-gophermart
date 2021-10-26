@@ -3,7 +3,7 @@ package authchecker
 
 import (
 	"context"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
 	"net/http"
@@ -11,10 +11,10 @@ import (
 
 type Handler struct {
 	l *zap.Logger
-	s pg.Storage
+	s storage.Storage
 }
 
-func New(l *zap.Logger, s pg.Storage) *Handler {
+func New(l *zap.Logger, s storage.Storage) *Handler {
 	return &Handler{l, s}
 }
 

@@ -13,26 +13,8 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/migrations"
 	"go.uber.org/zap"
+	"time"
 )
-
-type Storage interface {
-	// Register put new user in storage
-	Register(user user.User) error
-	// HasAuth check user auth in storage
-	HasAuth(user user.User) bool
-	// SetToken set token to user
-	SetToken(user user.User, token string) error
-	// UserByToken check token in storage and get user id
-	UserByToken(token string) (int, error)
-	// PutOrder put order in process for check status
-	PutOrder(userID int, code int) error
-	// HasOrder check order from current user
-	HasOrder(userID int, code int) bool
-	// SetStatus update status for order
-	SetStatus(orderCode int, status int) error
-	// AddPoints add points to user
-	AddPoints(userID int, points int, orderCode int) error
-}
 
 // Pg storage
 type Pg struct {
@@ -64,14 +46,41 @@ const sqlCheckToken = "SELECT id FROM users WHERE auth_token=$1"
 // sqlNewOrder create new order
 const sqlNewOrder = "INSERT INTO orders (id, user_id, code, check_status) VALUES (default, $1, $2, $3)"
 
-// sqlGetCode check code
-const sqlGetCode = "SELECT 1 FROM orders WHERE user_id=$1 AND code=$2"
-
 // sqlUpdateStatus update status order
-const sqlUpdateStatus = "UPDATE orders SET check_status=$1 WHERE code=$2"
+const sqlUpdateStatus = `
+UPDATE orders SET check_status=$1, accrual=$3, repeat_at=$4, check_attempts = check_attempts + 1  
+WHERE code=$2 AND is_check_done=false
+`
+
+// sqlUpdateDoneStatus set ended status
+const sqlUpdateDoneStatus = "UPDATE orders SET check_status=$1, accrual=$2, is_check_done=true WHERE code=$3"
 
 // sqlAddPoints update user points
 const sqlAddPoints = "UPDATE users SET points=points+$1 WHERE id=$2"
+
+// sqlGetOrders get all user orders
+const sqlGetOrders = `
+SELECT code AS number,
+       CASE
+           WHEN check_status = 1 THEN 'PROCESSING'
+           WHEN check_status = 2 THEN 'INVALID'
+           WHEN check_status = 3 THEN 'PROCESSED'
+           ELSE 'NEW'
+           END
+            AS status,
+       created_at,
+       accrual
+FROM orders
+WHERE user_id = $1
+ORDER BY id DESC
+`
+
+// sqlGetOrder get order by code
+const sqlGetOrder = `
+SELECT code, user_id, is_check_done, check_attempts
+FROM orders
+WHERE code=$1
+`
 
 // New New new Pg with not null fields
 func New(ctx context.Context, l *zap.Logger, e *env.Env) (*Pg, error) {
@@ -139,8 +148,8 @@ func (s *Pg) UserByToken(t string) (int, error) {
 }
 
 // PutOrder put order in storage
-func (s *Pg) PutOrder(id int, code int) error {
-	if _, err := s.db.Exec(sqlNewOrder, id, code, order.NEW); err != nil {
+func (s *Pg) PutOrder(ord order.Order) error {
+	if _, err := s.db.Exec(sqlNewOrder, ord.UserID, ord.Code, order.NEW); err != nil {
 		if err, ok := err.(*pq.Error); ok {
 			if err.Code == pgerrcode.UniqueViolation {
 				return ErrOrderAlreadyExist
@@ -152,16 +161,22 @@ func (s *Pg) PutOrder(id int, code int) error {
 	return nil
 }
 
-// HasOrder check order exist
-func (s *Pg) HasOrder(userID int, code int) bool {
-	return s.rowExists(sqlGetCode, userID, code)
-}
-
 // SetStatus update status to order by code
-func (s *Pg) SetStatus(orderCode int, status int) error {
-	_, err := s.db.Exec(sqlUpdateStatus, status, orderCode)
+func (s *Pg) SetStatus(orderCode int, status int, timeout int, points int) error {
+	// If it's ended status
+	if status == order.PROCESSED || status == order.INVALID {
+		_, err := s.db.Exec(sqlUpdateDoneStatus, status, points, orderCode)
 
-	return err
+		return err
+	} else {
+		if timeout < 1 {
+			timeout = 1
+		}
+		repeatAt := time.Now().Add(time.Duration(timeout) * time.Second).In(time.UTC)
+		_, err := s.db.Exec(sqlUpdateStatus, status, orderCode, points, repeatAt)
+
+		return err
+	}
 }
 
 // Check if exist record by query
@@ -176,7 +191,7 @@ func (s *Pg) rowExists(query string, args ...interface{}) bool {
 	return exists
 }
 
-// AddPoints add point sto user
+// AddPoints add points to user and done check
 func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -185,8 +200,7 @@ func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
 
 	defer tx.Rollback()
 
-	_, err = s.db.Exec(sqlUpdateStatus, order.PROCESSED, orderCode)
-	if err != nil {
+	if err := s.SetStatus(orderCode, order.PROCESSED, 0, points); err != nil {
 		return err
 	}
 
@@ -196,4 +210,36 @@ func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
 	}
 
 	return tx.Commit()
+}
+
+// Orders get user orders list
+func (s *Pg) Orders(userID int) ([]order.Order, error) {
+	var orders []order.Order
+	rows, err := s.db.Query(sqlGetOrders, userID)
+	if err != nil {
+		return orders, err
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return orders, err
+	}
+
+	for rows.Next() {
+		var userOrder order.Order
+		err = rows.Scan(&userOrder.Code, &userOrder.CheckStatus, &userOrder.UploadedAt, &userOrder.Accrual)
+		if err != nil {
+			return orders, err
+		}
+		orders = append(orders, userOrder)
+	}
+	return orders, nil
+}
+
+// OrderByCode get order by code
+func (s *Pg) OrderByCode(code int) (order.Order, error) {
+	var ord order.Order
+	err := s.db.QueryRow(sqlGetOrder, code).Scan(&ord.Code, &ord.UserID, &ord.IsCheckDone, &ord.Attempts)
+
+	return ord, err
 }

@@ -27,7 +27,7 @@ func main() {
 		}
 
 		min := 0
-		max := 6
+		max := 5
 		n := rand.Intn(max-min+1) + min
 
 		// Prepare response

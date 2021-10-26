@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/checker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker"
@@ -23,7 +23,7 @@ import (
 func main() {
 	// Init:
 	// Environments
-	ets := env.New()
+	ent := env.New()
 	// Logger
 	lgr, err := logger.New()
 	if err != nil {
@@ -32,31 +32,31 @@ func main() {
 	// Ctx
 	ctx, cancel := context.WithCancel(context.Background())
 	// Pg
-	stg, err := pg.New(ctx, lgr, ets)
+	stg, err := pg.New(ctx, lgr, ent)
 	if err != nil {
 		lgr.Fatal("Pg init error", zap.Error(err))
 	}
 
-	// Pool checker
-	ckr := checker.New(lgr, ets, stg)
+	// Broker
+	bkr := broker.Init(lgr, stg, ent)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		if err := ckr.Run(ctx); err != nil {
+		if err := bkr.Run(ctx); err != nil {
 			lgr.Error("Worker pool returned error", zap.Error(err))
 			cancel()
 		}
 	}()
 
 	// Routes
-	rtr := routes.Router(stg, lgr, ckr)
+	rtr := routes.Router(stg, lgr, bkr)
 	http.Handle("/", rtr)
 	// Server
 	srv := &http.Server{
-		Addr: ets.ServerAddress,
+		Addr: ent.ServerAddress,
 		Handler: conveyor.Conveyor(
 			rtr,
 			compressor.New(lgr).Gzip,
@@ -67,7 +67,7 @@ func main() {
 	go func() {
 		lgr.Info("app error exit", zap.Error(srv.ListenAndServe()))
 	}()
-	lgr.Info("The service is ready to listen and serve.", zap.String("addr", ets.ServerAddress))
+	lgr.Info("The service is ready to listen and serve.", zap.String("addr", ent.ServerAddress))
 	// Context with cancel func
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)

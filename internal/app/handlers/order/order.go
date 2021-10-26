@@ -2,9 +2,11 @@ package order
 
 import (
 	"context"
+	"database/sql"
 	"errors"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/checker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
 	"net/http"
@@ -12,14 +14,14 @@ import (
 
 type Handler struct {
 	ctx context.Context
-	l   *zap.Logger
-	s   pg.Storage
-	c   checker.Executor
+	lgr *zap.Logger
+	stg storage.Storage
+	bkr broker.QueueBroker
 }
 
 // New constructor
-func New(l *zap.Logger, s pg.Storage, c checker.Executor) *Handler {
-	return &Handler{l: l, s: s, c: c}
+func New(l *zap.Logger, s storage.Storage, c broker.QueueBroker) *Handler {
+	return &Handler{lgr: l, stg: s, bkr: c}
 }
 
 // Register order
@@ -40,23 +42,43 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
-	if h.s.HasOrder(userID.(int), orderCode) {
-		w.WriteHeader(http.StatusOK)
+
+	order, err := h.stg.OrderByCode(orderCode)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			h.lgr.Info("Error in get order", zap.Error(err))
+			http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if order.UserID == userID.(int) {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
-	if err := h.s.PutOrder(userID.(int), orderCode); err != nil {
+
+	order.UserID = userID.(int)
+	order.Code = orderCode
+
+	// Create order
+	if err := h.stg.PutOrder(order); err != nil {
+		// If someone already added code
 		if errors.Is(err, pg.ErrOrderAlreadyExist) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		h.l.Info("Put order error", zap.Error(err))
+		h.lgr.Info("Put order error", zap.Error(err))
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
 		return
 	}
-	// push task to check
-	err = h.c.Push(userID.(int), orderCode)
 
+	// Push in broker for check
+	err = h.bkr.Push(order)
 	if err != nil {
+		h.lgr.Info("Error handler", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		w.WriteHeader(http.StatusAccepted)

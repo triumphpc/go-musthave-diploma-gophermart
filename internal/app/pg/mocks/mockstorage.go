@@ -6,6 +6,8 @@ import (
 	mock "github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
+	"time"
 
 	user "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 )
@@ -91,7 +93,7 @@ func (_m *MockStorage) HasOrder(userID int, code int) bool {
 }
 
 // SetStatus update status for order
-func (_m *MockStorage) SetStatus(orderCode int, status int) error {
+func (_m *MockStorage) SetStatus(orderCode int, status int, points int) error {
 	if _m.ordercodes == nil {
 		_m.ordercodes = make(map[int]int)
 	}
@@ -101,8 +103,20 @@ func (_m *MockStorage) SetStatus(orderCode int, status int) error {
 
 // AddPoints add points to user
 func (_m *MockStorage) AddPoints(userID int, points int, orderCode int) error {
-	_m.SetStatus(orderCode, order.PROCESSED)
+	_m.SetStatus(orderCode, order.PROCESSED, 20)
 	_m.userpoints[userID] += points
 
 	return nil
+}
+
+// Orders get all orders by user
+func (_m *MockStorage) Orders(userID int) ([]order.Order, error) {
+	var orders []order.Order
+	var userOrder order.Order
+	userOrder.UploadedAt = jsontime.JSONTime(time.Now())
+	userOrder.Accrual = 30
+	userOrder.CheckStatus = "PROCESSED"
+	orders = append(orders, userOrder)
+
+	return orders, nil
 }

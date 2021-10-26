@@ -1,3 +1,5 @@
+// Package env implement work with environments and flags
+// @author Sergey Vrulin (aka Alex Versus)
 package env
 
 import (
@@ -20,13 +22,20 @@ type Env struct {
 	DatabaseDsn          string `env:"DATABASE_URI" envDefault:""`
 	AccrualSystemAddress string `env:"ACCRUAL_SYSTEM_ADDRESS" envDefault:""`
 	ServerAddress        string `env:"RUN_ADDRESS" envDefault:""`
+	BrokerType           string
+	BrokerHost           string
 }
 
-// Constants for variables
+// Constants for variables name
 const (
 	DatabaseDsn          = "DATABASE_URI"
 	AccrualSystemAddress = "ACCRUAL_SYSTEM_ADDRESS"
 	ServerAddress        = "RUN_ADDRESS"
+	BrokerType           = "BROKER_TYPE"
+	BrokerHost           = "BROKER_HOST"
+
+	BrokerTypeRabbitMQ = "rabbit"
+	BrokerTypeGO       = "go"
 )
 
 // Maps for take inv params
@@ -69,10 +78,13 @@ func (e *Env) init() {
 		e.ServerAddress = e.fromDotEnv(ServerAddress)
 	}
 
+	e.BrokerType = e.fromDotEnv(BrokerType)
+	e.BrokerHost = e.fromDotEnv(BrokerHost)
+
 	if e.DatabaseDsn == "" {
 		log.Fatal(ErrDSNNotDefine)
 	}
-	e.ServerAddress = e.fromDotEnv(ServerAddress)
+
 	if e.ServerAddress == "" {
 		log.Fatal(ErrServerAddressNotDefined)
 	}
