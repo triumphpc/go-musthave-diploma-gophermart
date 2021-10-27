@@ -4,9 +4,11 @@ import (
 	"context"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
-	mocks3 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/gobroker/mocks"
+	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
@@ -42,17 +44,31 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	strg := &mocks.MockStorage{}
-	ckr := &mocks3.Executor{}
+	stg := &mocks.MockStorage{}
+	broker := &mocks4.QueueBroker{}
+
+	broker.On("Push", mock.MatchedBy(func(input order.Order) bool {
+		// no implement
+		return true
+	})).Return(func(input order.Order) error {
+		return nil
+	}, nil)
+
+	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
+		// no implement
+		return true
+	})).Return(func(ctx context.Context) error {
+		return nil
+	}, nil)
 
 	handler := Handler{
 		ctx: context.Background(),
 		lgr: lgr,
-		stg: strg,
-		bkr: ckr,
+		stg: stg,
+		bkr: broker,
 	}
 
-	regHndlr := registration.New(lgr, strg)
+	regHandler := registration.New(lgr, stg)
 
 	tests := []struct {
 		name    string
@@ -63,7 +79,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}{
 		{
 			name:    "Check order #1",
-			handler: regHndlr,
+			handler: regHandler,
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/register",
@@ -131,7 +147,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:    "Check order #5",
-			handler: regHndlr,
+			handler: regHandler,
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/register",
@@ -234,7 +250,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 			h := conveyor.Conveyor(
 				rtr,
-				mocks2.NewMock(lgr, strg, tt.server.userID).CheckAuth,
+				mocks2.NewMock(lgr, stg, tt.server.userID).CheckAuth,
 			)
 
 			// Create server

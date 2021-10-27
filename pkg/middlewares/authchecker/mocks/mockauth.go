@@ -2,7 +2,7 @@ package mocks
 
 import (
 	"context"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
 	"net/http"
@@ -10,11 +10,11 @@ import (
 
 type MockAuth struct {
 	l      *zap.Logger
-	s      pg.Storage
+	s      storage.Storage
 	userID int
 }
 
-func NewMock(l *zap.Logger, s pg.Storage, userID int) *MockAuth {
+func NewMock(l *zap.Logger, s storage.Storage, userID int) *MockAuth {
 	return &MockAuth{l, s, userID}
 }
 

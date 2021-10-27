@@ -1,12 +1,15 @@
 package orderslist
 
 import (
+	"context"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
+	order2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
-	mocks3 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/gobroker/mocks"
+	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
@@ -43,9 +46,23 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		log.Fatal(err)
 	}
 	storage := &mocks.MockStorage{}
-	ckr := &mocks3.Executor{}
+	broker := &mocks4.QueueBroker{}
 
-	orderHandler := order.New(lgr, storage, ckr)
+	broker.On("Push", mock.MatchedBy(func(input order2.Order) bool {
+		// no implement
+		return true
+	})).Return(func(input order2.Order) error {
+		return nil
+	}, nil)
+
+	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
+		// no implement
+		return true
+	})).Return(func(ctx context.Context) error {
+		return nil
+	}, nil)
+
+	orderHandler := order.New(lgr, storage, broker)
 	regHandler := registration.New(lgr, storage)
 	handler := New(lgr, storage)
 

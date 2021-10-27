@@ -4,8 +4,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"go.uber.org/zap"
 	"io"
@@ -169,7 +169,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 func TestNew(t *testing.T) {
 	type args struct {
 		l *zap.Logger
-		s pg.Storage
+		s storage.Storage
 	}
 
 	lgr, err := logger.New()

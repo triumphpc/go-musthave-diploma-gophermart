@@ -29,11 +29,11 @@ type LoyalOrder struct {
 
 // Order user list
 type Order struct {
-	Code        int `json:"number"`
-	UserID      int
+	Code        int               `json:"number"`
+	UserID      int               `json:"-"`
 	CheckStatus string            `json:"status"`
 	Accrual     int               `json:"accrual,omitempty"`
 	UploadedAt  jsontime.JSONTime `json:"uploaded_at"`
-	Attempts    int
-	IsCheckDone bool
+	Attempts    int               `json:"-"`
+	IsCheckDone bool              `json:"-"`
 }

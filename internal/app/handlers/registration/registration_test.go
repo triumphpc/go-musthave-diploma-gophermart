@@ -3,8 +3,8 @@ package registration
 import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"go.uber.org/zap"
 	"io"
@@ -39,8 +39,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	strg := &mocks.MockStorage{}
-	hdlr := Handler{lgr, strg}
+	str := &mocks.MockStorage{}
+	handler := Handler{lgr, str}
 
 	tests := []struct {
 		name    string
@@ -51,7 +51,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}{
 		{
 			name:    "Check registration #1",
-			handler: hdlr,
+			handler: handler,
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/register",
@@ -67,7 +67,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:    "Check registration #2",
-			handler: hdlr,
+			handler: handler,
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/register",
@@ -83,7 +83,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		},
 		{
 			name:    "Check registration #3",
-			handler: hdlr,
+			handler: handler,
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/register",
@@ -150,7 +150,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 func TestNew(t *testing.T) {
 	type args struct {
 		l *zap.Logger
-		s pg.Storage
+		s storage.Storage
 	}
 
 	lgr, err := logger.New()

@@ -56,7 +56,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusConflict)
+		http.Error(w, "", http.StatusConflict)
 		return
 	}
 
