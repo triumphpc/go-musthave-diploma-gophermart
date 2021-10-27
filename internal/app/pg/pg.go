@@ -82,6 +82,13 @@ FROM orders
 WHERE code=$1
 `
 
+// sqlGetOrdersForCheck get chunk orders for checking
+const sqlGetOrdersForCheck = `
+SELECT code, user_id, check_attempts
+FROM orders WHERE is_check_done=false
+AND repeat_at < NOW() at time zone 'utc' LIMIT 1000
+`
+
 // New New new Pg with not null fields
 func New(ctx context.Context, l *zap.Logger, e *env.Env) (*Pg, error) {
 	// Database init
@@ -238,8 +245,33 @@ func (s *Pg) Orders(userID int) ([]order.Order, error) {
 
 // OrderByCode get order by code
 func (s *Pg) OrderByCode(code int) (order.Order, error) {
-	var ord order.Order
-	err := s.db.QueryRow(sqlGetOrder, code).Scan(&ord.Code, &ord.UserID, &ord.IsCheckDone, &ord.Attempts)
+	var userOrder order.Order
+	err := s.db.QueryRow(sqlGetOrder, code).Scan(&userOrder.Code, &userOrder.UserID, &userOrder.IsCheckDone, &userOrder.Attempts)
 
-	return ord, err
+	return userOrder, err
+}
+
+// OrdersForCheck get chunk for check in loyalty machine
+func (s *Pg) OrdersForCheck() ([]order.Order, error) {
+	var orders []order.Order
+	rows, err := s.db.Query(sqlGetOrdersForCheck)
+	if err != nil {
+		return orders, err
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return orders, err
+	}
+
+	for rows.Next() {
+		var userOrder order.Order
+		err = rows.Scan(&userOrder.Code, &userOrder.UserID, &userOrder.Attempts)
+		if err != nil {
+			return orders, err
+		}
+		orders = append(orders, userOrder)
+	}
+
+	return orders, nil
 }

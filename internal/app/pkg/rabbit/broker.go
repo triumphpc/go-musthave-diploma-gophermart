@@ -46,10 +46,9 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	defer func() {
 		b.lgr.Info("Close rabbit connection")
-		defer conn.Close()
+		conn.Close()
 		b.channel.Close()
 
 	}()
@@ -79,16 +78,17 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 	}
 
 	group, currentCtx := errgroup.WithContext(ctx)
+	// chan for check order
+	inputCh := make(chan order.Order, 1000)
+	defer close(inputCh)
+
 	for i := 0; i < runtime.NumCPU(); i++ {
-		bID := i
-
+		workID := i
 		f := func() error {
-			b.lgr.Info("Start worker", zap.Int("id", bID))
-			defer b.lgr.Info("Stop worker", zap.Int("id", bID))
-
 			for {
 				select {
 				case msg := <-msgChan:
+					// Init handlers for get from rabbit
 					if err := b.handler(msg.Body); err != nil {
 						b.lgr.Error("Task executed with error", zap.Error(err))
 						return err
@@ -103,7 +103,11 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 			}
 		}
 		group.Go(f)
+		// Run workers for check
+		group.Go(checker.Pusher(currentCtx, inputCh, b.lgr, b.ent, b.stg, workID))
 	}
+	// Run getter list for check
+	group.Go(checker.Repeater(currentCtx, inputCh, b.lgr, b.stg))
 
 	return group.Wait()
 }

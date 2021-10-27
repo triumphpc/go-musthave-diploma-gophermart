@@ -24,6 +24,8 @@ type Storage interface {
 	AddPoints(userID int, points int, orderCode int) error
 	// Orders get all orders by user
 	Orders(userID int) ([]order.Order, error)
-	// OrderByCode get order by ;code
+	// OrderByCode get order by code
 	OrderByCode(code int) (order.Order, error)
+	// OrdersForCheck get all orders for check in loyalty machine
+	OrdersForCheck() ([]order.Order, error)
 }

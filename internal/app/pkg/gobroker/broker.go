@@ -17,7 +17,7 @@ type Task = func() error
 
 // GoBroker run and check task for order
 type GoBroker struct {
-	l       *zap.Logger
+	lgr     *zap.Logger
 	tasks   chan Task
 	workers []chan int
 	ent     *env.Env
@@ -27,7 +27,7 @@ type GoBroker struct {
 // New constructor
 func New(logger *zap.Logger, env *env.Env, stg storage.Storage) *GoBroker {
 	return &GoBroker{
-		l:       logger,
+		lgr:     logger,
 		tasks:   make(chan Task, 1000),
 		workers: make([]chan int, runtime.NumCPU()),
 		ent:     env,
@@ -50,45 +50,52 @@ func (b *GoBroker) Pause(sec int) {
 // Run checker for orders
 func (b *GoBroker) Run(ctx context.Context) error {
 	group, currentCtx := errgroup.WithContext(ctx)
+	// chan for check order
+	inputCh := make(chan order.Order, 1000)
+	defer close(inputCh)
 
 	for i := range b.workers {
 		b.workers[i] = make(chan int, 1)
-		wID := i
+		workID := i
 		f := func() error {
-			b.l.Info("Worker start", zap.Int("id", wID))
+			b.lgr.Info("Worker start", zap.Int("id", workID))
 			for {
 				select {
-				case timout := <-b.workers[wID]:
-					b.l.Info("Worker pause", zap.Int("id", wID))
+				case timout := <-b.workers[workID]:
+					b.lgr.Info("Worker pause", zap.Int("id", workID))
 					time.Sleep(time.Duration(timout) * time.Second)
 
 				case task := <-b.tasks:
-					b.l.Info("Worker take task", zap.Int("id", wID))
+					b.lgr.Info("Worker take task", zap.Int("id", workID))
 
 					if err := task(); err != nil {
-						b.l.Error("Task executed with error", zap.Error(err))
+						b.lgr.Error("Task executed with error", zap.Error(err))
 						return err
 					}
 
 				case <-currentCtx.Done():
-					b.l.Info("Worker out by context", zap.Int("id", wID))
+					b.lgr.Info("Worker out by context", zap.Int("id", workID))
 					return ctx.Err()
 				}
 			}
 		}
 		group.Go(f)
+		// Run workers for check
+		group.Go(checker.Pusher(currentCtx, inputCh, b.lgr, b.ent, b.stg, workID))
 	}
-	b.l.Info("GoBroker pool ran with", zap.Int(" thread of number", len(b.workers)))
+	b.lgr.Info("GoBroker pool ran with", zap.Int(" thread of number", len(b.workers)))
+	// Run getter list for check
+	group.Go(checker.Repeater(currentCtx, inputCh, b.lgr, b.stg))
 
 	return group.Wait()
 }
 
 // Push new check for order
 func (b *GoBroker) Push(order order.Order) error {
-	b.l.Info("Push order id", zap.Int("id", order.Code))
+	b.lgr.Info("Push order id", zap.Int("id", order.Code))
 	// Add to check pool
 	err := b.add(func() error {
-		return checker.Check(b.l, b.ent, b.stg, order)
+		return checker.Check(b.lgr, b.ent, b.stg, order)
 	})
 
 	return err

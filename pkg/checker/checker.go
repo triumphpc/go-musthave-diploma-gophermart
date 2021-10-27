@@ -3,6 +3,7 @@
 package checker
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
@@ -11,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // Check order status from loyal machine
@@ -36,7 +38,6 @@ func Check(lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.O
 		if err != nil {
 			return err
 		}
-
 		return stg.SetStatus(userOrder.Code, order.PROCESSING, timeout, 0)
 
 	case http.StatusOK:
@@ -79,16 +80,80 @@ func Check(lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.O
 			lgr.Info("Order is processed", zap.Reflect("order", ord))
 
 		default:
-			lgr.Info("Unknown status from loyal machine")
-			if err := stg.SetStatus(userOrder.Code, order.PROCESSING, 60, 0); err != nil {
-				return err
-			}
+			return badResponseCheck(userOrder, stg, lgr)
 		}
 	default:
-		lgr.Info("Bad code loyal machine")
-		if err := stg.SetStatus(userOrder.Code, order.PROCESSING, 60, 0); err != nil {
-			return err
-		}
+		return badResponseCheck(userOrder, stg, lgr)
 	}
 	return nil
+}
+
+// badResponseCheck work with bad response from loyal machine
+func badResponseCheck(userOrder order.Order, stg storage.Storage, lgr *zap.Logger) error {
+	if userOrder.Attempts > 5 {
+		if err := stg.SetStatus(userOrder.Code, order.INVALID, 0, 0); err != nil {
+			return err
+		}
+		lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
+		return nil
+
+	}
+	currentTimeout := userOrder.Attempts * 60
+	if err := stg.SetStatus(userOrder.Code, order.PROCESSING, currentTimeout, 0); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Repeater run get orders for check iteratively
+func Repeater(ctx context.Context, input chan<- order.Order, lgr *zap.Logger, stg storage.Storage) func() error {
+	return func() error {
+		lgr.Info("Run Repeater")
+		defer lgr.Info("Out Repeater")
+
+		for {
+			select {
+			// How ofter chek in storage
+			case <-time.After(5 * time.Second):
+				orders, err := stg.OrdersForCheck()
+				if err != nil {
+					lgr.Error("Get order error", zap.Error(err))
+					continue
+				}
+
+				if len(orders) == 0 {
+					continue
+				}
+
+				for _, ord := range orders {
+					lgr.Info("Set order to chan", zap.Reflect("order", ord))
+					input <- ord
+				}
+
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+}
+
+// Pusher run check orders in goroutines
+func Pusher(ctx context.Context, input <-chan order.Order, lgr *zap.Logger, ent *env.Env, stg storage.Storage, workID int) func() error {
+	return func() error {
+		lgr.Info("Run pusher", zap.Int("work id", workID))
+		defer lgr.Info("Out pushed", zap.Int("work id", workID))
+		for {
+			select {
+			// How ofter check in storage
+			case ord := <-input:
+				lgr.Info("Get order from chan", zap.Reflect("worker id", workID))
+				if err := Check(lgr, ent, stg, ord); err != nil {
+					return err
+				}
+
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
 }
