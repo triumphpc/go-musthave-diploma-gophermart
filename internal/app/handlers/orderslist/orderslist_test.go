@@ -8,6 +8,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
 	order2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
 	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
@@ -37,8 +38,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 
 	type server struct {
-		path   string
-		userID int
+		path string
+		usr  user.User
 	}
 
 	lgr, err := logger.New()
@@ -61,6 +62,10 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	})).Return(func(ctx context.Context) error {
 		return nil
 	}, nil)
+
+	usr := user.User{
+		UserID: 1,
+	}
 
 	orderHandler := order.New(lgr, storage, broker)
 	regHandler := registration.New(lgr, storage)
@@ -102,8 +107,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/register",
-				userID: 1,
+				path: "/api/user/register",
+				usr:  usr,
 			},
 		},
 		{
@@ -119,8 +124,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 		{
@@ -136,8 +141,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 		{
@@ -153,8 +158,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "application/json; charset=utf-8",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 	}
@@ -177,7 +182,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 			h := conveyor.Conveyor(
 				rtr,
-				mocks2.NewMock(lgr, storage, tt.server.userID).CheckAuth,
+				mocks2.NewMock(lgr, storage, tt.server.usr).CheckAuth,
 			)
 
 			// Create server

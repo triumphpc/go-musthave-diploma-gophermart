@@ -2,6 +2,7 @@ package orderslist
 
 import (
 	"encoding/json"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
@@ -20,14 +21,15 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 
 // HasAuth user
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(ht.CtxUserIsAuth)
+	usr := r.Context().Value(ht.CtxUser)
+	currentUser, _ := usr.(user.User)
 
-	if userID == 0 {
+	if currentUser.UserID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	orders, err := h.s.Orders(userID.(int))
+	orders, err := h.s.Orders(currentUser.UserID)
 	if err != nil {
 		h.l.Info("Internal error", zap.Error(err))
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)

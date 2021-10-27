@@ -4,8 +4,11 @@ import "encoding/hex"
 
 // User model
 type User struct {
-	Login    string `json:"login"`
-	Password string `json:"password"`
+	UserID    int     `json:"-"`
+	Login     string  `json:"login"`
+	Password  string  `json:"password"`
+	Points    float64 `json:"current"`
+	Withdrawn float64 `json:"withdrawn"`
 }
 
 // HexPassword return hex password

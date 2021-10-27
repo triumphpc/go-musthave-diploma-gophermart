@@ -15,7 +15,7 @@ type Storage interface {
 	// SetToken set token to user
 	SetToken(user user.User, token string) error
 	// UserByToken check token in storage and get user id
-	UserByToken(token string) (int, error)
+	UserByToken(token string) (user.User, error)
 	// PutOrder put order in process for check status
 	PutOrder(ord order.Order) error
 	// SetStatus update status for order

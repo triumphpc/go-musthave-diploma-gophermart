@@ -60,8 +60,14 @@ func (_m *MockStorage) SetToken(u user.User, t string) error {
 }
 
 // UserByToken without logic
-func (_m *MockStorage) UserByToken(t string) (int, error) {
-	return 0, nil
+func (_m *MockStorage) UserByToken(token string) (user.User, error) {
+	usr := user.User{}
+	for k, v := range _m.tokens {
+		if v == token {
+			usr.Login = k
+		}
+	}
+	return usr, nil
 }
 
 // PutOrder put order in process for check status

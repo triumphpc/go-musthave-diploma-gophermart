@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
 	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
@@ -36,8 +37,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 
 	type server struct {
-		path   string
-		userID int
+		path string
+		usr  user.User
 	}
 
 	lgr, err := logger.New()
@@ -70,6 +71,18 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	regHandler := registration.New(lgr, stg)
 
+	usr := user.User{
+		UserID: 1,
+	}
+
+	usr2 := user.User{
+		UserID: 2,
+	}
+
+	usr3 := user.User{
+		UserID: 3,
+	}
+
 	tests := []struct {
 		name    string
 		want    want
@@ -90,8 +103,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/register",
-				userID: 1,
+				path: "/api/user/register",
+				usr:  usr,
 			},
 		},
 		{
@@ -107,8 +120,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 		{
@@ -124,8 +137,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 		{
@@ -141,8 +154,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 1,
+				path: "/api/user/orders",
+				usr:  usr,
 			},
 		},
 		{
@@ -158,8 +171,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/register",
-				userID: 2,
+				path: "/api/user/register",
+				usr:  usr2,
 			},
 		},
 		{
@@ -175,8 +188,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 2,
+				path: "/api/user/orders",
+				usr:  usr2,
 			},
 		},
 		{
@@ -192,8 +205,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 3,
+				path: "/api/user/orders",
+				usr:  usr3,
 			},
 		},
 		{
@@ -209,8 +222,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 3,
+				path: "/api/user/orders",
+				usr:  usr3,
 			},
 		},
 		{
@@ -226,8 +239,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path:   "/api/user/orders",
-				userID: 3,
+				path: "/api/user/orders",
+				usr:  usr3,
 			},
 		},
 	}
@@ -250,7 +263,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 			h := conveyor.Conveyor(
 				rtr,
-				mocks2.NewMock(lgr, stg, tt.server.userID).CheckAuth,
+				mocks2.NewMock(lgr, stg, tt.server.usr).CheckAuth,
 			)
 
 			// Create server

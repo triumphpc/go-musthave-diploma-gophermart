@@ -40,10 +40,10 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	strg := &mocks.MockStorage{}
-	hdlr := Handler{lgr, strg}
+	stg := &mocks.MockStorage{}
+	hdlr := Handler{lgr, stg}
 
-	regHndlr := registration.New(lgr, strg)
+	regHndlr := registration.New(lgr, stg)
 
 	tests := []struct {
 		name    string

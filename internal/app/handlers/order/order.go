@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
@@ -26,9 +27,10 @@ func New(l *zap.Logger, s storage.Storage, c broker.QueueBroker) *Handler {
 
 // Register order
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(ht.CtxUserIsAuth)
+	usr := r.Context().Value(ht.CtxUser)
+	currentUser, _ := usr.(user.User)
 
-	if userID == 0 {
+	if currentUser.UserID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -51,7 +53,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if order.UserID == userID.(int) {
+		if order.UserID == currentUser.UserID {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -60,7 +62,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.UserID = userID.(int)
+	order.UserID = currentUser.UserID
 	order.Code = orderCode
 
 	// Create order

@@ -41,7 +41,7 @@ const sqlGetUser = "SELECT 1 FROM users WHERE login=$1 AND password=$2"
 const sqlUpdateToken = "UPDATE users SET auth_token=$1 WHERE login=$2"
 
 // sqlCheckToken get user id by token
-const sqlCheckToken = "SELECT id FROM users WHERE auth_token=$1"
+const sqlCheckToken = "SELECT id, points, withdrawn FROM users WHERE auth_token=$1"
 
 // sqlNewOrder create new order
 const sqlNewOrder = "INSERT INTO orders (id, user_id, code, check_status) VALUES (default, $1, $2, $3)"
@@ -144,14 +144,14 @@ func (s *Pg) SetToken(u user.User, t string) error {
 }
 
 // UserByToken check if token exist
-func (s *Pg) UserByToken(t string) (int, error) {
-	var userID int
-	err := s.db.QueryRow(sqlCheckToken, t).Scan(&userID)
+func (s *Pg) UserByToken(t string) (user.User, error) {
+	var usr user.User
+	err := s.db.QueryRow(sqlCheckToken, t).Scan(&usr.UserID, &usr.Points, &usr.Withdrawn)
 	if err != nil {
-		return userID, ErrUserNotFound
+		return usr, ErrUserNotFound
 	}
 
-	return userID, nil
+	return usr, nil
 }
 
 // PutOrder put order in storage
