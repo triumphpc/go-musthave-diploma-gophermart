@@ -1,19 +1,24 @@
-package auth
+package withdraw
 
 import (
+	"context"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	ord "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
-	"go.uber.org/zap"
+	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -34,16 +39,38 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	type server struct {
 		path string
+		usr  user.User
 	}
 
 	lgr, err := logger.New()
 	if err != nil {
 		log.Fatal(err)
 	}
-	stg := &mocks.MockStorage{}
-	hdlr := Handler{lgr, stg}
+	storage := &mocks.MockStorage{}
+	usr := user.User{
+		UserID: 1,
+	}
 
-	regHndlr := registration.New(lgr, stg)
+	regHandler := registration.New(lgr, storage)
+	handler := New(lgr, storage)
+
+	broker := &mocks4.QueueBroker{}
+
+	broker.On("Push", mock.MatchedBy(func(input order.Order) bool {
+		// no implement
+		return true
+	})).Return(func(input order.Order) error {
+		return nil
+	}, nil)
+
+	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
+		// no implement
+		return true
+	})).Return(func(ctx context.Context) error {
+		return nil
+	}, nil)
+
+	orderHandler := ord.New(lgr, storage, broker)
 
 	tests := []struct {
 		name    string
@@ -53,24 +80,24 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		server  server
 	}{
 		{
-			name:    "Check auth #1",
-			handler: hdlr,
+			name:    "Check withdraw #1",
+			handler: handler,
 			request: request{
 				method: http.MethodPost,
-				target: "/api/user/login",
-				body:   "{\n    \"login\": \"login\",\n    \"password\": \"password123\"\n} ",
+				target: "/api/user/balance/withdraw",
+				body:   "",
 			},
 			want: want{
 				code:        http.StatusUnauthorized,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/login",
+				path: "/api/user/balance/withdraw",
 			},
 		},
 		{
-			name:    "Check auth #2",
-			handler: regHndlr,
+			name:    "Check withdraw #2",
+			handler: regHandler,
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/register",
@@ -82,38 +109,58 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 			server: server{
 				path: "/api/user/register",
+				usr:  usr,
 			},
 		},
 		{
-			name:    "Check auth #3",
-			handler: hdlr,
+			name:    "Check withdraw #3",
+			handler: handler,
 			request: request{
 				method: http.MethodPost,
-				target: "/api/user/login",
-				body:   "{\n    \"login\": \"login\",\n    \"password\": \"password123\"\n} ",
+				target: "/api/user/balance/withdraw",
+				body:   "{\"order\": \"3\",\"sum\": 6\n}",
 			},
 			want: want{
-				code:        http.StatusOK,
+				code:        http.StatusUnprocessableEntity,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/login",
+				path: "/api/user/balance/withdraw",
+				usr:  usr,
 			},
 		},
 		{
-			name:    "Check auth #4",
-			handler: hdlr,
+			name:    "Check withdraw #4",
+			handler: orderHandler,
 			request: request{
 				method: http.MethodPost,
-				target: "/api/user/login",
-				body:   "{\n    \"loin\": \"login\",\n    \"password\": \"passwrd123\"\n} ",
+				target: "/api/user/orders",
+				body:   "12345674",
 			},
 			want: want{
-				code:        http.StatusBadRequest,
+				code:        http.StatusAccepted,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/login",
+				path: "/api/user/orders",
+				usr:  usr,
+			},
+		},
+		{
+			name:    "Check withdraw #5",
+			handler: handler,
+			request: request{
+				method: http.MethodPost,
+				target: "/api/user/balance/withdraw",
+				body:   "{\"order\": \"3\",\"sum\": 6\n}",
+			},
+			want: want{
+				code:        http.StatusUnprocessableEntity,
+				contentType: "",
+			},
+			server: server{
+				path: "/api/user/balance/withdraw",
+				usr:  usr,
 			},
 		},
 	}
@@ -132,11 +179,15 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			w := httptest.NewRecorder()
 			// Init handler
 			rtr := mux.NewRouter()
-
 			rtr.Handle(tt.server.path, tt.handler)
 
+			h := conveyor.Conveyor(
+				rtr,
+				mocks2.NewMock(lgr, storage, tt.server.usr).CheckAuth,
+			)
+
 			// Create server
-			rtr.ServeHTTP(w, request)
+			h.ServeHTTP(w, request)
 			res := w.Result()
 
 			// Check code
@@ -161,39 +212,6 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 			if tt.want.contentType != "" {
 				assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
-			}
-		})
-	}
-}
-
-func TestNew(t *testing.T) {
-	type args struct {
-		l *zap.Logger
-		s storage.Storage
-	}
-
-	lgr, err := logger.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-	stg := &mocks.MockStorage{}
-	flds := args{lgr, stg}
-
-	tests := []struct {
-		name string
-		args args
-		want *Handler
-	}{
-		{
-			name: "New check",
-			args: flds,
-			want: &Handler{lgr, stg},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := New(tt.args.l, tt.args.s); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("New() = %v, want %v", got, tt.want)
 			}
 		})
 	}

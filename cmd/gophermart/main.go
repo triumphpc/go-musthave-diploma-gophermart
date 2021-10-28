@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker"

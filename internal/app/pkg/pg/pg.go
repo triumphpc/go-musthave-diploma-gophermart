@@ -58,6 +58,12 @@ const sqlUpdateDoneStatus = "UPDATE orders SET check_status=$1, accrual=$2, is_c
 // sqlAddPoints update user points
 const sqlAddPoints = "UPDATE users SET points=points+$1 WHERE id=$2"
 
+// sqlSubPoints update user points in order
+const sqlSubPoints = "UPDATE orders SET accrual=accrual-$1 WHERE id=$2"
+
+// sqlUserSubPoints update user points
+const sqlUserSubPoints = "UPDATE users SET points=points-$1, withdrawn=withdrawn+$2 WHERE id=$3"
+
 // sqlGetOrders get all user orders
 const sqlGetOrders = `
 SELECT code AS number,
@@ -77,7 +83,7 @@ ORDER BY id DESC
 
 // sqlGetOrder get order by code
 const sqlGetOrder = `
-SELECT code, user_id, is_check_done, check_attempts
+SELECT id, code, user_id, is_check_done, check_attempts, accrual
 FROM orders
 WHERE code=$1
 `
@@ -246,7 +252,14 @@ func (s *Pg) Orders(userID int) ([]order.Order, error) {
 // OrderByCode get order by code
 func (s *Pg) OrderByCode(code int) (order.Order, error) {
 	var userOrder order.Order
-	err := s.db.QueryRow(sqlGetOrder, code).Scan(&userOrder.Code, &userOrder.UserID, &userOrder.IsCheckDone, &userOrder.Attempts)
+	err := s.db.QueryRow(sqlGetOrder, code).Scan(
+		&userOrder.ID,
+		&userOrder.Code,
+		&userOrder.UserID,
+		&userOrder.IsCheckDone,
+		&userOrder.Attempts,
+		&userOrder.Accrual,
+	)
 
 	return userOrder, err
 }
@@ -274,4 +287,24 @@ func (s *Pg) OrdersForCheck() ([]order.Order, error) {
 	}
 
 	return orders, nil
+}
+
+// Withdraw points from user account
+func (s *Pg) Withdraw(ord order.Order, points float64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = s.db.Exec(sqlUserSubPoints, points, points, ord.UserID)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(sqlSubPoints, points, ord.ID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }

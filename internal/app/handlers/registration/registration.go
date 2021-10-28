@@ -4,7 +4,7 @@ package registration
 import (
 	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"

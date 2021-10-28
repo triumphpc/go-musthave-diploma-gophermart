@@ -19,7 +19,6 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 	return &Handler{l, s}
 }
 
-// HasAuth user
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	usr := r.Context().Value(ht.CtxUser)
 	currentUser, _ := usr.(user.User)

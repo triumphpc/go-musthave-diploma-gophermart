@@ -28,4 +28,6 @@ type Storage interface {
 	OrderByCode(code int) (order.Order, error)
 	// OrdersForCheck get all orders for check in loyalty machine
 	OrdersForCheck() ([]order.Order, error)
+	// Withdraw points from user account
+	Withdraw(ord order.Order, points float64) error
 }

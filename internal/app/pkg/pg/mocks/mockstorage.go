@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	mock "github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
 	"time"
 
@@ -149,6 +149,7 @@ func (_m *MockStorage) OrderByCode(code int) (order.Order, error) {
 	return userOrder, sql.ErrNoRows
 }
 
+// OrdersForCheck implement check orders mock
 func (_m *MockStorage) OrdersForCheck() ([]order.Order, error) {
 	var orders []order.Order
 	var userOrder order.Order
@@ -158,4 +159,8 @@ func (_m *MockStorage) OrdersForCheck() ([]order.Order, error) {
 	orders = append(orders, userOrder)
 
 	return orders, nil
+}
+
+func (_m *MockStorage) Withdraw(ord order.Order, points float64) error {
+	return nil
 }

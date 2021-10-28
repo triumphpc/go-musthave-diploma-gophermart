@@ -3,7 +3,7 @@ package registration
 import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pg/mocks"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg/mocks"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"go.uber.org/zap"
