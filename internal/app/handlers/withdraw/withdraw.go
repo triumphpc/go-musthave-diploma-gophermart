@@ -66,12 +66,14 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Has no points for withdraw in order
-	if float64(order.Accrual) < request.Sum || currentUser.Points < request.Sum {
+	if order.AvailForWithdraw < request.Sum || currentUser.Points < request.Sum {
 		http.Error(w, "", http.StatusPaymentRequired)
 		return
 	}
 
-	if err := h.s.Withdraw(order, request.Sum); err != nil {
+	h.l.Info("Add to withdraw", zap.Reflect("order", order))
+	if err := h.s.AddWithdraw(order, request.Sum); err != nil {
+		h.l.Error("Don't add withdraw", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}

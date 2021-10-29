@@ -5,6 +5,7 @@ package storage
 import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/withdraw"
 )
 
 type Storage interface {
@@ -30,4 +31,10 @@ type Storage interface {
 	OrdersForCheck() ([]order.Order, error)
 	// Withdraw points from user account
 	Withdraw(ord order.Order, points float64) error
+	// AddWithdraw to queue
+	AddWithdraw(ord order.Order, points float64) error
+	// ActiveWithdrawals get list of new withdrawals
+	ActiveWithdrawals() ([]withdraw.Withdraw, error)
+	// WithdrawsByUserID get list of user withdrawals
+	WithdrawsByUserID(userID int) ([]withdraw.Withdraw, error)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/withdraw"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/migrations"
 	"go.uber.org/zap"
 	"time"
@@ -48,51 +49,87 @@ const sqlNewOrder = "INSERT INTO orders (id, user_id, code, check_status) VALUES
 
 // sqlUpdateStatus update status order
 const sqlUpdateStatus = `
-UPDATE orders SET check_status=$1, accrual=$3, repeat_at=$4, check_attempts = check_attempts + 1  
-WHERE code=$2 AND is_check_done=false
+	UPDATE orders SET check_status=$1, accrual=$3, repeat_at=$4, check_attempts = check_attempts + 1  
+	WHERE code=$2 AND is_check_done=false
 `
 
 // sqlUpdateDoneStatus set ended status
-const sqlUpdateDoneStatus = "UPDATE orders SET check_status=$1, accrual=$2, is_check_done=true WHERE code=$3"
+const sqlUpdateDoneStatus = `
+	UPDATE orders 
+	SET check_status=$1, 
+	accrual=$2, 
+	is_check_done=true, 
+	avail_for_withdraw=$4 
+	WHERE code=$3
+`
 
 // sqlAddPoints update user points
 const sqlAddPoints = "UPDATE users SET points=points+$1 WHERE id=$2"
 
-// sqlSubPoints update user points in order
-const sqlSubPoints = "UPDATE orders SET accrual=accrual-$1 WHERE id=$2"
+// sqlSubAvailPointsInOrder update user points in order
+const sqlSubAvailPointsInOrder = "UPDATE orders SET avail_for_withdraw=avail_for_withdraw-$1 WHERE id=$2"
 
 // sqlUserSubPoints update user points
 const sqlUserSubPoints = "UPDATE users SET points=points-$1, withdrawn=withdrawn+$2 WHERE id=$3"
 
+// sqlAddWithdrawToQueue add queue
+const sqlAddWithdrawToQueue = "INSERT INTO withdrawals (id, user_id, order_id, points) VALUES (default, $1, $2, $3)"
+
+// sqlWithdrawUpdate update status to withdraw
+const sqlWithdrawUpdate = `
+	UPDATE withdrawals 
+	SET status=1, processed_at=now()
+	WHERE user_id=$1 AND order_id=$2 AND points=$3
+`
+
 // sqlGetOrders get all user orders
 const sqlGetOrders = `
-SELECT code AS number,
-       CASE
-           WHEN check_status = 1 THEN 'PROCESSING'
-           WHEN check_status = 2 THEN 'INVALID'
-           WHEN check_status = 3 THEN 'PROCESSED'
-           ELSE 'NEW'
-           END
-            AS status,
-       created_at,
-       accrual
-FROM orders
-WHERE user_id = $1
-ORDER BY id DESC
+	SELECT code AS number,
+		   CASE
+			   WHEN check_status = 1 THEN 'PROCESSING'
+			   WHEN check_status = 2 THEN 'INVALID'
+			   WHEN check_status = 3 THEN 'PROCESSED'
+			   ELSE 'NEW'
+			   END
+				AS status,
+		   created_at,
+		   accrual
+	FROM orders
+	WHERE user_id = $1
+	ORDER BY id DESC
 `
 
 // sqlGetOrder get order by code
 const sqlGetOrder = `
-SELECT id, code, user_id, is_check_done, check_attempts, accrual
-FROM orders
-WHERE code=$1
+	SELECT id, code, user_id, is_check_done, check_attempts, accrual, avail_for_withdraw
+	FROM orders
+	WHERE code=$1
 `
 
 // sqlGetOrdersForCheck get chunk orders for checking
 const sqlGetOrdersForCheck = `
-SELECT code, user_id, check_attempts
-FROM orders WHERE is_check_done=false
-AND repeat_at < NOW() at time zone 'utc' LIMIT 1000
+	SELECT code, user_id, check_attempts
+	FROM orders WHERE is_check_done=false
+	AND repeat_at < NOW() at time zone 'utc' LIMIT 1000
+`
+
+// sqlGetWithdrawals get withdrawals for withdraw
+const sqlGetWithdrawals = `
+	SELECT user_id, order_id, points FROM withdrawals WHERE status=0 ORDER BY processed_at DESC LIMIT 1000
+`
+
+// sqlGetWithdrawalsByUserID get list withdrawal by user id
+const sqlGetWithdrawalsByUserID = `
+	SELECT w.points, o.code, processed_at,
+	 CASE
+			   WHEN status = 1 THEN 'PROCESSED'
+			   ELSE 'NEW'
+			   END
+				AS status
+	FROM withdrawals AS w
+	JOIN orders AS o ON o.id = w.order_id
+	WHERE w.user_id=$1 
+	ORDER BY processed_at DESC
 `
 
 // New New new Pg with not null fields
@@ -178,7 +215,7 @@ func (s *Pg) PutOrder(ord order.Order) error {
 func (s *Pg) SetStatus(orderCode int, status int, timeout int, points int) error {
 	// If it's ended status
 	if status == order.PROCESSED || status == order.INVALID {
-		_, err := s.db.Exec(sqlUpdateDoneStatus, status, points, orderCode)
+		_, err := s.db.Exec(sqlUpdateDoneStatus, status, points, orderCode, points)
 
 		return err
 	} else {
@@ -259,6 +296,7 @@ func (s *Pg) OrderByCode(code int) (order.Order, error) {
 		&userOrder.IsCheckDone,
 		&userOrder.Attempts,
 		&userOrder.Accrual,
+		&userOrder.AvailForWithdraw,
 	)
 
 	return userOrder, err
@@ -289,22 +327,88 @@ func (s *Pg) OrdersForCheck() ([]order.Order, error) {
 	return orders, nil
 }
 
-// Withdraw points from user account
-func (s *Pg) Withdraw(ord order.Order, points float64) error {
+// AddWithdraw add withdraw to queue
+func (s *Pg) AddWithdraw(ord order.Order, points float64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
+	if _, err := s.db.Exec(sqlAddWithdrawToQueue, ord.UserID, ord.ID, points); err != nil {
+		return err
+	}
+
 	_, err = s.db.Exec(sqlUserSubPoints, points, points, ord.UserID)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.Exec(sqlSubPoints, points, ord.ID)
+	_, err = s.db.Exec(sqlSubAvailPointsInOrder, points, ord.ID)
 	if err != nil {
 		return err
 	}
+
 	return tx.Commit()
+}
+
+// Withdraw points from user account
+func (s *Pg) Withdraw(ord order.Order, points float64) error {
+	_, err := s.db.Exec(sqlWithdrawUpdate, ord.UserID, ord.ID, points)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ActiveWithdrawals get active withdrawals from list
+func (s *Pg) ActiveWithdrawals() ([]withdraw.Withdraw, error) {
+	var wds []withdraw.Withdraw
+	rows, err := s.db.Query(sqlGetWithdrawals)
+	if err != nil {
+		return wds, err
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return wds, err
+	}
+
+	for rows.Next() {
+		var wd withdraw.Withdraw
+		err = rows.Scan(&wd.UserID, &wd.OrderID, &wd.Sum)
+		if err != nil {
+			return wds, err
+		}
+		wds = append(wds, wd)
+	}
+
+	return wds, nil
+}
+
+// WithdrawsByUserID get list of user withdrawals
+func (s *Pg) WithdrawsByUserID(userID int) ([]withdraw.Withdraw, error) {
+	var wds []withdraw.Withdraw
+	rows, err := s.db.Query(sqlGetWithdrawalsByUserID, userID)
+	if err != nil {
+		return wds, err
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return wds, err
+	}
+
+	for rows.Next() {
+		var wd withdraw.Withdraw
+		err = rows.Scan(&wd.Sum, &wd.OrderID, &wd.ProcessedAt, &wd.Status)
+		if err != nil {
+			return wds, err
+		}
+		wds = append(wds, wd)
+	}
+
+	fmt.Println(wds)
+
+	return wds, nil
 }

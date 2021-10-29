@@ -5,6 +5,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/withdrawal"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker"
@@ -46,6 +47,16 @@ func main() {
 	go func() {
 		defer wg.Done()
 		if err := bkr.Run(ctx); err != nil {
+			lgr.Error("Worker pool returned error", zap.Error(err))
+			cancel()
+		}
+	}()
+
+	// Run withdraw handler
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := withdrawal.Run(ctx, lgr, stg); err != nil {
 			lgr.Error("Worker pool returned error", zap.Error(err))
 			cancel()
 		}

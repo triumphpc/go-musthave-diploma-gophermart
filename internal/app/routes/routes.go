@@ -8,6 +8,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/orderslist"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/withdraw"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/withdrawallist"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"go.uber.org/zap"
@@ -29,6 +30,8 @@ func Router(s storage.Storage, l *zap.Logger, c broker.QueueBroker) *mux.Router 
 	rtr.Handle("/api/user/balance", balance.New(l, s)).Methods(http.MethodGet)
 	// Withdraw request
 	rtr.Handle("/api/user/balance/withdraw", withdraw.New(l, s)).Methods(http.MethodPost)
+	// Get withdrawals statuses
+	rtr.Handle("/api/user/balance/withdrawals", withdrawallist.New(l, s)).Methods(http.MethodGet)
 
 	return rtr
 }
