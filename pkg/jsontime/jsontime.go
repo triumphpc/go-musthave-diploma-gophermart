@@ -3,7 +3,6 @@
 package jsontime
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -46,7 +45,7 @@ func (jt *JSONTime) UnmarshalJSON(b []byte) error {
 			return nil
 		}
 	}
-	return errors.New(fmt.Sprintf("Invalid date format: %s", timeString))
+	return fmt.Errorf("invalid date format: %s", timeString)
 }
 
 func (jt *JSONTime) ToTime() time.Time {
