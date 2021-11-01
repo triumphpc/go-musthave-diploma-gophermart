@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/withdrawal"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
@@ -18,6 +20,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // Entrypoint project
@@ -32,6 +35,7 @@ func main() {
 	}
 	// Ctx
 	ctx, cancel := context.WithCancel(context.Background())
+
 	// Pg
 	stg, err := pg.New(ctx, lgr, ent)
 	if err != nil {
@@ -47,21 +51,51 @@ func main() {
 	go func() {
 		defer wg.Done()
 		if err := bkr.Run(ctx); err != nil {
-			lgr.Error("Worker pool returned error", zap.Error(err))
-			cancel()
+			if !errors.Is(err, context.Canceled) {
+				lgr.Error("Broker returned error", zap.Error(err))
+				cancel()
+			}
 		}
 	}()
 
-	// Run withdraw handler
+	// Withdraw handler
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if err := withdrawal.Run(ctx, lgr, stg); err != nil {
-			lgr.Error("Worker pool returned error", zap.Error(err))
-			cancel()
+			if !errors.Is(err, context.Canceled) {
+				lgr.Error("Withdraw pool returned error", zap.Error(err))
+				cancel()
+			}
 		}
 	}()
 
+	// System signals
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		killSignal := <-interrupt
+		switch killSignal {
+		case os.Interrupt:
+			lgr.Info("Got SIGINT...")
+		case syscall.SIGTERM:
+			lgr.Info("Got SIGTERM...")
+		}
+		cancel()
+	}()
+
+	if err := serve(ctx, stg, lgr, bkr, ent); err != nil {
+		lgr.Error("failed to serve:", zap.Error(err))
+	}
+
+	wg.Wait()
+
+	lgr.Info("Done")
+}
+
+// serve implementation
+func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker.QueueBroker, ent *env.Env) (err error) {
 	// Routes
 	rtr := routes.Router(stg, lgr, bkr)
 	http.Handle("/", rtr)
@@ -76,33 +110,30 @@ func main() {
 	}
 	// Run server
 	go func() {
-		lgr.Info("app error exit", zap.Error(srv.ListenAndServe()))
-	}()
-	lgr.Info("The service is ready to listen and serve.", zap.String("addr", ent.ServerAddress))
-	// Context with cancel func
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-	// Add context for Graceful shutdown
-	select {
-	case killSignal := <-interrupt:
-		switch killSignal {
-		case os.Interrupt:
-			lgr.Info("Got SIGINT...")
-		case syscall.SIGTERM:
-			lgr.Info("Got SIGTERM...")
+		if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			lgr.Fatal("app error exit", zap.Error(srv.ListenAndServe()))
 		}
-	case <-ctx.Done():
-	}
+	}()
 
-	lgr.Info("The service is shutting down...")
-	cancel()
+	lgr.Info("The service is ready to listen and serve.", zap.String("addr", ent.ServerAddress))
+
+	<-ctx.Done()
+
+	// Close storage connect
 	stg.Close()
-	// Server shutdown
-	if err := srv.Shutdown(ctx); err != nil {
-		lgr.Info("app error exit", zap.Error(err))
+	lgr.Info("Storage connection stopped")
+	lgr.Info("Server stopped")
+
+	ctxShutDown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	if err = srv.Shutdown(ctxShutDown); err != nil {
+		lgr.Fatal("server shutdown failed", zap.Error(err))
 	}
 
-	wg.Wait()
+	lgr.Info("Server exited properly")
 
-	lgr.Info("Done")
+	return
 }

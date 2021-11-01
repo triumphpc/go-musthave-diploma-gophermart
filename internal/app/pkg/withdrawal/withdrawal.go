@@ -17,7 +17,7 @@ func Run(ctx context.Context, lgr *zap.Logger, stg storage.Storage) error {
 		select {
 		// How ofter check withdrawals
 		case <-time.After(time.Second):
-			wds, err := stg.ActiveWithdrawals()
+			wds, err := stg.ActiveWithdrawals(ctx)
 			if err != nil {
 				lgr.Error("Get withdrawals error", zap.Error(err))
 				continue
@@ -36,7 +36,7 @@ func Run(ctx context.Context, lgr *zap.Logger, stg storage.Storage) error {
 					ID:     wd.OrderID,
 				}
 				lgr.Info("Withdraw process", zap.Reflect("order", ord), zap.Reflect("sum", wd.Sum))
-				if err := stg.Withdraw(ord, wd.Sum); err != nil {
+				if err := stg.Withdraw(ctx, ord, wd.Sum); err != nil {
 					lgr.Error("Error withdraw", zap.Error(err))
 					return ctx.Err()
 				}

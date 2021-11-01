@@ -17,7 +17,7 @@ type QueueBroker interface {
 	// Run broker
 	Run(ctx context.Context) error
 	// Push order id for check in broker
-	Push(order order.Order) error
+	Push(ctx context.Context, order order.Order) error
 }
 
 // Init project message broker

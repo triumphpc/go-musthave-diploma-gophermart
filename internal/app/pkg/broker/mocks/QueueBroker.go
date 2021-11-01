@@ -15,7 +15,7 @@ type QueueBroker struct {
 }
 
 // Push provides a mock function with given fields: _a0
-func (_m *QueueBroker) Push(_a0 order.Order) error {
+func (_m *QueueBroker) Push(ctx context.Context, _a0 order.Order) error {
 	ret := _m.Called(_a0)
 
 	var r0 error

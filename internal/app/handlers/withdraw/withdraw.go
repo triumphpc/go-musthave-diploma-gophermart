@@ -23,6 +23,12 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 	return &Handler{l, s}
 }
 
+// request on withdraw
+type request struct {
+	Order string  `json:"order"`
+	Sum   float64 `json:"sum"`
+}
+
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	usr := r.Context().Value(ht.CtxUser)
 	currentUser, _ := usr.(user.User)
@@ -42,37 +48,34 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	var request struct {
-		Order string  `json:"order"`
-		Sum   float64 `json:"sum"`
-	}
 
-	err = json.Unmarshal(body, &request)
+	req := request{}
+	err = json.Unmarshal(body, &req)
 	if err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
-	orderID, err := strconv.Atoi(request.Order)
+	orderID, err := strconv.Atoi(req.Order)
 	if err != nil {
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
-	order, err := h.s.OrderByCode(orderID)
+	order, err := h.s.OrderByCode(r.Context(), orderID)
 	if err != nil {
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
 	// Has no points for withdraw in order
-	if order.AvailForWithdraw < request.Sum || currentUser.Points < request.Sum {
+	if order.AvailForWithdraw < req.Sum || currentUser.Points < req.Sum {
 		http.Error(w, "", http.StatusPaymentRequired)
 		return
 	}
 
 	h.l.Info("Add to withdraw", zap.Reflect("order", order))
-	if err := h.s.AddWithdraw(order, request.Sum); err != nil {
+	if err := h.s.AddWithdraw(r.Context(), order, req.Sum); err != nil {
 		h.l.Error("Don't add withdraw", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return

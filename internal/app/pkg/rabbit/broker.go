@@ -89,7 +89,7 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 				select {
 				case msg := <-msgChan:
 					// Init handlers for get from rabbit
-					if err := b.handler(msg.Body); err != nil {
+					if err := checker.Handle(ctx, msg.Body, b.lgr, b.ent, b.stg); err != nil {
 						b.lgr.Error("Task executed with error", zap.Error(err))
 						return err
 					}
@@ -112,17 +112,8 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 	return group.Wait()
 }
 
-// handler task from queue
-func (b *RMQBroker) handler(body []byte) error {
-	var userOrder order.Order
-	if err := json.Unmarshal(body, &userOrder); err != nil {
-		return err
-	}
-	return checker.Check(b.lgr, b.ent, b.stg, userOrder)
-}
-
 // Push order id in queue
-func (b *RMQBroker) Push(order order.Order) error {
+func (b *RMQBroker) Push(ctx context.Context, order order.Order) error {
 	body, err := json.Marshal(order)
 	if err != nil {
 		return err

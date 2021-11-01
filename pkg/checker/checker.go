@@ -16,7 +16,7 @@ import (
 )
 
 // Check order status from loyal machine
-func Check(lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.Order) error {
+func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.Order) error {
 	lgr.Info("Check order", zap.Reflect("order", userOrder))
 
 	url := ent.AccrualSystemAddress + "/api/orders/" + strconv.Itoa(userOrder.Code)
@@ -38,7 +38,7 @@ func Check(lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.O
 		if err != nil {
 			return err
 		}
-		return stg.SetStatus(userOrder.Code, order.PROCESSING, timeout, 0)
+		return stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, timeout, 0)
 
 	case http.StatusOK:
 		body, err := ioutil.ReadAll(resp.Body)
@@ -56,42 +56,42 @@ func Check(lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.O
 		// Check current status for order
 		switch ord.Status {
 		case order.LoyalRegistered:
-			if err := stg.SetStatus(userOrder.Code, order.NEW, 1, 0); err != nil {
+			if err := stg.SetStatus(ctx, userOrder.Code, order.NEW, 1, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order registered", zap.Int("order code", userOrder.Code))
 
 		case order.LoyalInvalid:
-			if err := stg.SetStatus(userOrder.Code, order.INVALID, 0, 0); err != nil {
+			if err := stg.SetStatus(ctx, userOrder.Code, order.INVALID, 0, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
 
 		case order.LoyalProcessing:
-			if err := stg.SetStatus(userOrder.Code, order.PROCESSING, 1, 0); err != nil {
+			if err := stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, 1, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order is processing", zap.Int("order code", userOrder.Code))
 
 		case order.LoyalProcessed:
-			if err := stg.AddPoints(userOrder.UserID, ord.Accrual, userOrder.Code); err != nil {
+			if err := stg.AddPoints(ctx, userOrder.UserID, ord.Accrual, userOrder.Code); err != nil {
 				return err
 			}
 			lgr.Info("Order is processed", zap.Reflect("order", ord))
 
 		default:
-			return badResponseCheck(userOrder, stg, lgr)
+			return badResponseCheck(ctx, userOrder, stg, lgr)
 		}
 	default:
-		return badResponseCheck(userOrder, stg, lgr)
+		return badResponseCheck(ctx, userOrder, stg, lgr)
 	}
 	return nil
 }
 
 // badResponseCheck work with bad response from loyal machine
-func badResponseCheck(userOrder order.Order, stg storage.Storage, lgr *zap.Logger) error {
+func badResponseCheck(ctx context.Context, userOrder order.Order, stg storage.Storage, lgr *zap.Logger) error {
 	if userOrder.Attempts > 5 {
-		if err := stg.SetStatus(userOrder.Code, order.INVALID, 0, 0); err != nil {
+		if err := stg.SetStatus(ctx, userOrder.Code, order.INVALID, 0, 0); err != nil {
 			return err
 		}
 		lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
@@ -99,7 +99,7 @@ func badResponseCheck(userOrder order.Order, stg storage.Storage, lgr *zap.Logge
 
 	}
 	currentTimeout := userOrder.Attempts * 60
-	if err := stg.SetStatus(userOrder.Code, order.PROCESSING, currentTimeout, 0); err != nil {
+	if err := stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, currentTimeout, 0); err != nil {
 		return err
 	}
 	return nil
@@ -115,7 +115,7 @@ func Repeater(ctx context.Context, input chan<- order.Order, lgr *zap.Logger, st
 			select {
 			// How ofter chek in storage
 			case <-time.After(5 * time.Second):
-				orders, err := stg.OrdersForCheck()
+				orders, err := stg.OrdersForCheck(ctx)
 				if err != nil {
 					lgr.Error("Get order error", zap.Error(err))
 					continue
@@ -147,7 +147,7 @@ func Pusher(ctx context.Context, input <-chan order.Order, lgr *zap.Logger, ent 
 			// How ofter check in storage
 			case ord := <-input:
 				lgr.Info("Get order from chan", zap.Reflect("worker id", workID))
-				if err := Check(lgr, ent, stg, ord); err != nil {
+				if err := Check(ctx, lgr, ent, stg, ord); err != nil {
 					return err
 				}
 
@@ -156,4 +156,13 @@ func Pusher(ctx context.Context, input <-chan order.Order, lgr *zap.Logger, ent 
 			}
 		}
 	}
+}
+
+// Handle task from queue
+func Handle(ctx context.Context, body []byte, lgr *zap.Logger, ent *env.Env, stg storage.Storage) error {
+	var userOrder order.Order
+	if err := json.Unmarshal(body, &userOrder); err != nil {
+		return err
+	}
+	return Check(ctx, lgr, ent, stg, userOrder)
 }

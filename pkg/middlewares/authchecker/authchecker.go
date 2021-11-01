@@ -24,7 +24,7 @@ func (h Handler) CheckAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var usr user.User
 		if token, err := r.Cookie(ht.CookieUserIDName); err == nil {
-			usr, _ = h.s.UserByToken(token.Value)
+			usr, _ = h.s.UserByToken(r.Context(), token.Value)
 		}
 
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ht.CtxUser, usr)))

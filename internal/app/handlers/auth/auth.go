@@ -37,14 +37,20 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check auth
-	if !h.s.HasAuth(*usr) {
+	exist, err := h.s.HasAuth(r.Context(), *usr)
+	if err != nil {
+		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
+		h.l.Info("Internal error", zap.Error(err))
+		return
+	}
+
+	if !exist {
 		http.Error(w, ErrAuthIncorrect.Error(), http.StatusUnauthorized)
 		return
 	}
 	// HasAuth user
 	token := ht.AuthUser(w)
-	err := h.s.SetToken(*usr, token)
-
+	err = h.s.SetToken(r.Context(), *usr, token)
 	if err != nil {
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
 		h.l.Info("Internal error", zap.Error(err))

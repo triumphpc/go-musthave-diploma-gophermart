@@ -3,6 +3,7 @@
 package mocks
 
 import (
+	"context"
 	"database/sql"
 	mock "github.com/stretchr/testify/mock"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
@@ -25,19 +26,19 @@ type MockStorage struct {
 }
 
 // Auth provides a mock function with given fields: u
-func (_m *MockStorage) HasAuth(u user.User) bool {
+func (_m *MockStorage) HasAuth(ctx context.Context, u user.User) (bool, error) {
 	if _m.storage == nil {
 		_m.storage = make(map[string]user.User)
 	}
 
 	if _, ok := _m.storage[u.Login]; ok {
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // Register provides a mock function with given fields: u
-func (_m *MockStorage) Register(u user.User) error {
+func (_m *MockStorage) Register(ctx context.Context, u user.User) error {
 	if _m.storage == nil {
 		_m.storage = make(map[string]user.User)
 	}
@@ -51,7 +52,7 @@ func (_m *MockStorage) Register(u user.User) error {
 }
 
 // SetToken provides a mock function with given fields: u
-func (_m *MockStorage) SetToken(u user.User, t string) error {
+func (_m *MockStorage) SetToken(ctx context.Context, u user.User, t string) error {
 	if _m.tokens == nil {
 		_m.tokens = make(map[string]string)
 	}
@@ -61,7 +62,7 @@ func (_m *MockStorage) SetToken(u user.User, t string) error {
 }
 
 // UserByToken without logic
-func (_m *MockStorage) UserByToken(token string) (user.User, error) {
+func (_m *MockStorage) UserByToken(ctx context.Context, token string) (user.User, error) {
 	usr := user.User{}
 	for k, v := range _m.tokens {
 		if v == token {
@@ -72,7 +73,7 @@ func (_m *MockStorage) UserByToken(token string) (user.User, error) {
 }
 
 // PutOrder put order in process for check status
-func (_m *MockStorage) PutOrder(ord order.Order) error {
+func (_m *MockStorage) PutOrder(ctx context.Context, ord order.Order) error {
 	if _m.orders == nil {
 		_m.orders = make(map[int]int)
 	}
@@ -87,7 +88,7 @@ func (_m *MockStorage) PutOrder(ord order.Order) error {
 }
 
 // HasOrder check order in mock storage
-func (_m *MockStorage) HasOrder(userID int, code int) bool {
+func (_m *MockStorage) HasOrder(ctx context.Context, userID int, code int) bool {
 	if _m.orders == nil {
 		_m.orders = make(map[int]int)
 	}
@@ -101,7 +102,7 @@ func (_m *MockStorage) HasOrder(userID int, code int) bool {
 }
 
 // SetStatus update status for order
-func (_m *MockStorage) SetStatus(orderCode int, status int, timeout int, points int) error {
+func (_m *MockStorage) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
 	if _m.ordercodes == nil {
 		_m.ordercodes = make(map[int]int)
 	}
@@ -110,15 +111,15 @@ func (_m *MockStorage) SetStatus(orderCode int, status int, timeout int, points 
 }
 
 // AddPoints add points to user
-func (_m *MockStorage) AddPoints(userID int, points int, orderCode int) error {
-	_m.SetStatus(orderCode, order.PROCESSED, 0, 20)
+func (_m *MockStorage) AddPoints(ctx context.Context, userID int, points int, orderCode int) error {
+	_m.SetStatus(ctx, orderCode, order.PROCESSED, 0, 20)
 	_m.userpoints[userID] += points
 
 	return nil
 }
 
 // Orders get all orders by user
-func (_m *MockStorage) Orders(userID int) ([]order.Order, error) {
+func (_m *MockStorage) Orders(ctx context.Context, userID int) ([]order.Order, error) {
 	var orders []order.Order
 
 	for k, v := range _m.orders {
@@ -136,7 +137,7 @@ func (_m *MockStorage) Orders(userID int) ([]order.Order, error) {
 }
 
 // OrderByCode get orde by code
-func (_m *MockStorage) OrderByCode(code int) (order.Order, error) {
+func (_m *MockStorage) OrderByCode(ctx context.Context, code int) (order.Order, error) {
 	userOrder := order.Order{}
 
 	for k, v := range _m.orders {
@@ -151,7 +152,7 @@ func (_m *MockStorage) OrderByCode(code int) (order.Order, error) {
 }
 
 // OrdersForCheck implement check orders mock
-func (_m *MockStorage) OrdersForCheck() ([]order.Order, error) {
+func (_m *MockStorage) OrdersForCheck(ctx context.Context) ([]order.Order, error) {
 	var orders []order.Order
 	var userOrder order.Order
 	userOrder.UploadedAt = jsontime.JSONTime(time.Now())
@@ -162,15 +163,15 @@ func (_m *MockStorage) OrdersForCheck() ([]order.Order, error) {
 	return orders, nil
 }
 
-func (_m *MockStorage) Withdraw(ord order.Order, points float64) error {
+func (_m *MockStorage) Withdraw(ctx context.Context, ord order.Order, points float64) error {
 	return nil
 }
 
-func (_m *MockStorage) AddWithdraw(ord order.Order, points float64) error {
+func (_m *MockStorage) AddWithdraw(ctx context.Context, ord order.Order, points float64) error {
 	return nil
 }
 
-func (_m *MockStorage) ActiveWithdrawals() ([]withdraw.Withdraw, error) {
+func (_m *MockStorage) ActiveWithdrawals(ctx context.Context) ([]withdraw.Withdraw, error) {
 	var wds []withdraw.Withdraw
 	var wd withdraw.Withdraw
 	wds = append(wds, wd)
@@ -178,10 +179,14 @@ func (_m *MockStorage) ActiveWithdrawals() ([]withdraw.Withdraw, error) {
 	return wds, nil
 }
 
-func (_m *MockStorage) WithdrawsByUserID(userID int) ([]withdraw.Withdraw, error) {
+func (_m *MockStorage) WithdrawsByUserID(ctx context.Context, userID int) ([]withdraw.Withdraw, error) {
 	var wds []withdraw.Withdraw
 	var wd withdraw.Withdraw
 	wds = append(wds, wd)
 
 	return wds, nil
+}
+
+func (_m *MockStorage) Close() {
+	return
 }

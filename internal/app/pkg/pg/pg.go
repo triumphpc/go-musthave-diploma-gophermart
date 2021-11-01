@@ -161,8 +161,8 @@ func (s *Pg) Close() {
 }
 
 // Register register new user in storage
-func (s *Pg) Register(u user.User) error {
-	if _, err := s.db.Exec(sqlNewUser, u.Login, u.HexPassword()); err != nil {
+func (s *Pg) Register(ctx context.Context, user user.User) error {
+	if _, err := s.db.ExecContext(ctx, sqlNewUser, user.Login, user.HexPassword()); err != nil {
 		if err, ok := err.(*pq.Error); ok {
 			if err.Code == pgerrcode.UniqueViolation {
 				return ErrLoginAlreadyExist
@@ -175,21 +175,21 @@ func (s *Pg) Register(u user.User) error {
 }
 
 // HasAuth search user in storage
-func (s *Pg) HasAuth(u user.User) bool {
-	return s.rowExists(sqlGetUser, u.Login, u.HexPassword())
+func (s *Pg) HasAuth(ctx context.Context, u user.User) (bool, error) {
+	return s.rowExists(ctx, sqlGetUser, u.Login, u.HexPassword())
 }
 
 // SetToken update token to user
-func (s *Pg) SetToken(u user.User, t string) error {
-	_, err := s.db.Exec(sqlUpdateToken, t, u.Login)
+func (s *Pg) SetToken(ctx context.Context, u user.User, t string) error {
+	_, err := s.db.ExecContext(ctx, sqlUpdateToken, t, u.Login)
 
 	return err
 }
 
 // UserByToken check if token exist
-func (s *Pg) UserByToken(t string) (user.User, error) {
+func (s *Pg) UserByToken(ctx context.Context, t string) (user.User, error) {
 	var usr user.User
-	err := s.db.QueryRow(sqlCheckToken, t).Scan(&usr.UserID, &usr.Points, &usr.Withdrawn)
+	err := s.db.QueryRowContext(ctx, sqlCheckToken, t).Scan(&usr.UserID, &usr.Points, &usr.Withdrawn)
 	if err != nil {
 		return usr, ErrUserNotFound
 	}
@@ -198,8 +198,8 @@ func (s *Pg) UserByToken(t string) (user.User, error) {
 }
 
 // PutOrder put order in storage
-func (s *Pg) PutOrder(ord order.Order) error {
-	if _, err := s.db.Exec(sqlNewOrder, ord.UserID, ord.Code, order.NEW); err != nil {
+func (s *Pg) PutOrder(ctx context.Context, ord order.Order) error {
+	if _, err := s.db.ExecContext(ctx, sqlNewOrder, ord.UserID, ord.Code, order.NEW); err != nil {
 		if err, ok := err.(*pq.Error); ok {
 			if err.Code == pgerrcode.UniqueViolation {
 				return ErrOrderAlreadyExist
@@ -212,37 +212,37 @@ func (s *Pg) PutOrder(ord order.Order) error {
 }
 
 // SetStatus update status to order by code
-func (s *Pg) SetStatus(orderCode int, status int, timeout int, points int) error {
+func (s *Pg) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
 	// If it's ended status
 	if status == order.PROCESSED || status == order.INVALID {
-		_, err := s.db.Exec(sqlUpdateDoneStatus, status, points, orderCode, points)
-
-		return err
-	} else {
-		if timeout < 1 {
-			timeout = 1
-		}
-		repeatAt := time.Now().Add(time.Duration(timeout) * time.Second).In(time.UTC)
-		_, err := s.db.Exec(sqlUpdateStatus, status, orderCode, points, repeatAt)
+		_, err := s.db.ExecContext(ctx, sqlUpdateDoneStatus, status, points, orderCode, points)
 
 		return err
 	}
+
+	if timeout < 1 {
+		timeout = 1
+	}
+	repeatAt := time.Now().Add(time.Duration(timeout) * time.Second).In(time.UTC)
+	_, err := s.db.ExecContext(ctx, sqlUpdateStatus, status, orderCode, points, repeatAt)
+
+	return err
 }
 
 // Check if exist record by query
-func (s *Pg) rowExists(query string, args ...interface{}) bool {
+func (s *Pg) rowExists(ctx context.Context, query string, args ...interface{}) (bool, error) {
 	var exists bool
 	query = fmt.Sprintf("SELECT exists (%s)", query)
-	err := s.db.QueryRow(query, args...).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&exists)
 	if err != nil && err != sql.ErrNoRows {
-		return false
+		return false, err
 	}
 
-	return exists
+	return exists, nil
 }
 
 // AddPoints add points to user and done check
-func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
+func (s *Pg) AddPoints(ctx context.Context, userID int, points int, orderCode int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -250,11 +250,11 @@ func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
 
 	defer tx.Rollback()
 
-	if err := s.SetStatus(orderCode, order.PROCESSED, 0, points); err != nil {
+	if err := s.SetStatus(ctx, orderCode, order.PROCESSED, 0, points); err != nil {
 		return err
 	}
 
-	_, err = s.db.Exec(sqlAddPoints, points, userID)
+	_, err = s.db.ExecContext(ctx, sqlAddPoints, points, userID)
 	if err != nil {
 		return err
 	}
@@ -263,9 +263,9 @@ func (s *Pg) AddPoints(userID int, points int, orderCode int) error {
 }
 
 // Orders get user orders list
-func (s *Pg) Orders(userID int) ([]order.Order, error) {
+func (s *Pg) Orders(ctx context.Context, userID int) ([]order.Order, error) {
 	var orders []order.Order
-	rows, err := s.db.Query(sqlGetOrders, userID)
+	rows, err := s.db.QueryContext(ctx, sqlGetOrders, userID)
 	if err != nil {
 		return orders, err
 	}
@@ -287,9 +287,9 @@ func (s *Pg) Orders(userID int) ([]order.Order, error) {
 }
 
 // OrderByCode get order by code
-func (s *Pg) OrderByCode(code int) (order.Order, error) {
+func (s *Pg) OrderByCode(ctx context.Context, code int) (order.Order, error) {
 	var userOrder order.Order
-	err := s.db.QueryRow(sqlGetOrder, code).Scan(
+	err := s.db.QueryRowContext(ctx, sqlGetOrder, code).Scan(
 		&userOrder.ID,
 		&userOrder.Code,
 		&userOrder.UserID,
@@ -303,9 +303,9 @@ func (s *Pg) OrderByCode(code int) (order.Order, error) {
 }
 
 // OrdersForCheck get chunk for check in loyalty machine
-func (s *Pg) OrdersForCheck() ([]order.Order, error) {
+func (s *Pg) OrdersForCheck(ctx context.Context) ([]order.Order, error) {
 	var orders []order.Order
-	rows, err := s.db.Query(sqlGetOrdersForCheck)
+	rows, err := s.db.QueryContext(ctx, sqlGetOrdersForCheck)
 	if err != nil {
 		return orders, err
 	}
@@ -328,23 +328,23 @@ func (s *Pg) OrdersForCheck() ([]order.Order, error) {
 }
 
 // AddWithdraw add withdraw to queue
-func (s *Pg) AddWithdraw(ord order.Order, points float64) error {
+func (s *Pg) AddWithdraw(ctx context.Context, ord order.Order, points float64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	if _, err := s.db.Exec(sqlAddWithdrawToQueue, ord.UserID, ord.ID, points); err != nil {
+	if _, err := s.db.ExecContext(ctx, sqlAddWithdrawToQueue, ord.UserID, ord.ID, points); err != nil {
 		return err
 	}
 
-	_, err = s.db.Exec(sqlUserSubPoints, points, points, ord.UserID)
+	_, err = s.db.ExecContext(ctx, sqlUserSubPoints, points, points, ord.UserID)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.db.Exec(sqlSubAvailPointsInOrder, points, ord.ID)
+	_, err = s.db.ExecContext(ctx, sqlSubAvailPointsInOrder, points, ord.ID)
 	if err != nil {
 		return err
 	}
@@ -353,18 +353,19 @@ func (s *Pg) AddWithdraw(ord order.Order, points float64) error {
 }
 
 // Withdraw points from user account
-func (s *Pg) Withdraw(ord order.Order, points float64) error {
-	_, err := s.db.Exec(sqlWithdrawUpdate, ord.UserID, ord.ID, points)
+func (s *Pg) Withdraw(ctx context.Context, ord order.Order, points float64) error {
+	_, err := s.db.ExecContext(ctx, sqlWithdrawUpdate, ord.UserID, ord.ID, points)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // ActiveWithdrawals get active withdrawals from list
-func (s *Pg) ActiveWithdrawals() ([]withdraw.Withdraw, error) {
+func (s *Pg) ActiveWithdrawals(ctx context.Context) ([]withdraw.Withdraw, error) {
 	var wds []withdraw.Withdraw
-	rows, err := s.db.Query(sqlGetWithdrawals)
+	rows, err := s.db.QueryContext(ctx, sqlGetWithdrawals)
 	if err != nil {
 		return wds, err
 	}
@@ -387,9 +388,9 @@ func (s *Pg) ActiveWithdrawals() ([]withdraw.Withdraw, error) {
 }
 
 // WithdrawsByUserID get list of user withdrawals
-func (s *Pg) WithdrawsByUserID(userID int) ([]withdraw.Withdraw, error) {
+func (s *Pg) WithdrawsByUserID(ctx context.Context, userID int) ([]withdraw.Withdraw, error) {
 	var wds []withdraw.Withdraw
-	rows, err := s.db.Query(sqlGetWithdrawalsByUserID, userID)
+	rows, err := s.db.QueryContext(ctx, sqlGetWithdrawalsByUserID, userID)
 	if err != nil {
 		return wds, err
 	}
@@ -407,8 +408,6 @@ func (s *Pg) WithdrawsByUserID(userID int) ([]withdraw.Withdraw, error) {
 		}
 		wds = append(wds, wd)
 	}
-
-	fmt.Println(wds)
 
 	return wds, nil
 }

@@ -29,7 +29,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wds, err := h.s.WithdrawsByUserID(currentUser.UserID)
+	wds, err := h.s.WithdrawsByUserID(r.Context(), currentUser.UserID)
 
 	if err != nil {
 		h.l.Info("Internal error", zap.Error(err))

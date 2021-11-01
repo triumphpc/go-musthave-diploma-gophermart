@@ -9,7 +9,6 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/sync/errgroup"
 	"runtime"
-	"time"
 )
 
 // Task for check order id
@@ -41,12 +40,6 @@ func (b *GoBroker) add(task Task) error {
 	return nil
 }
 
-func (b *GoBroker) Pause(sec int) {
-	for i := range b.workers {
-		b.workers[i] <- sec
-	}
-}
-
 // Run checker for orders
 func (b *GoBroker) Run(ctx context.Context) error {
 	group, currentCtx := errgroup.WithContext(ctx)
@@ -61,10 +54,6 @@ func (b *GoBroker) Run(ctx context.Context) error {
 			b.lgr.Info("Worker start", zap.Int("id", workID))
 			for {
 				select {
-				case timout := <-b.workers[workID]:
-					b.lgr.Info("Worker pause", zap.Int("id", workID))
-					time.Sleep(time.Duration(timout) * time.Second)
-
 				case task := <-b.tasks:
 					b.lgr.Info("Worker take task", zap.Int("id", workID))
 
@@ -91,11 +80,11 @@ func (b *GoBroker) Run(ctx context.Context) error {
 }
 
 // Push new check for order
-func (b *GoBroker) Push(order order.Order) error {
+func (b *GoBroker) Push(ctx context.Context, order order.Order) error {
 	b.lgr.Info("Push order id", zap.Int("id", order.Code))
 	// Add to check pool
 	err := b.add(func() error {
-		return checker.Check(b.lgr, b.ent, b.stg, order)
+		return checker.Check(ctx, b.lgr, b.ent, b.stg, order)
 	})
 
 	return err

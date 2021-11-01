@@ -34,7 +34,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Register new user
-	if err := h.s.Register(*usr); err != nil {
+	if err := h.s.Register(r.Context(), *usr); err != nil {
 		if errors.Is(err, pg.ErrLoginAlreadyExist) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -45,7 +45,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// HasAuth user
 	token := ht.AuthUser(w)
-	if err := h.s.SetToken(*usr, token); err != nil {
+	if err := h.s.SetToken(r.Context(), *usr, token); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		h.l.Info("Internal error", zap.Error(err))
 		return

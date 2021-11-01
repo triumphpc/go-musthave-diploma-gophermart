@@ -45,7 +45,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.stg.OrderByCode(orderCode)
+	order, err := h.stg.OrderByCode(r.Context(), orderCode)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			h.lgr.Info("Error in get order", zap.Error(err))
@@ -66,7 +66,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	order.Code = orderCode
 
 	// Create order
-	if err := h.stg.PutOrder(order); err != nil {
+	if err := h.stg.PutOrder(r.Context(), order); err != nil {
 		// If someone already added code
 		if errors.Is(err, pg.ErrOrderAlreadyExist) {
 			http.Error(w, err.Error(), http.StatusConflict)
@@ -78,11 +78,12 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Push in broker for check
-	err = h.bkr.Push(order)
+	err = h.bkr.Push(r.Context(), order)
 	if err != nil {
 		h.lgr.Info("Error handler", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		w.WriteHeader(http.StatusAccepted)
+		return
 	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
