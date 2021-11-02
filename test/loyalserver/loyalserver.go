@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"log"
 	"math/rand"
 	"net/http"
@@ -20,7 +20,7 @@ func main() {
 
 		rand.Seed(time.Now().UnixNano())
 
-		odr := order.LoyalOrder{
+		odr := models.LoyalOrder{
 			Order:   number,
 			Status:  "REGISTERED",
 			Accrual: rand.Intn(100),

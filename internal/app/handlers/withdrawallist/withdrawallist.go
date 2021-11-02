@@ -3,7 +3,7 @@ package withdrawallist
 
 import (
 	"encoding/json"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
@@ -11,8 +11,8 @@ import (
 )
 
 type Handler struct {
-	l *zap.Logger
-	s storage.Storage
+	lgr *zap.Logger
+	stg storage.Storage
 }
 
 // New constructor
@@ -21,25 +21,27 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	usr := r.Context().Value(ht.CtxUser)
-	currentUser, _ := usr.(user.User)
+	var currentUser models.User
+	if token, err := r.Cookie(ht.CookieUserIDName); err == nil {
+		currentUser, _ = h.stg.UserByToken(r.Context(), token.Value)
+	}
 
 	if currentUser.UserID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	wds, err := h.s.WithdrawsByUserID(r.Context(), currentUser.UserID)
+	wds, err := h.stg.WithdrawsByUserID(r.Context(), currentUser.UserID)
 
 	if err != nil {
-		h.l.Info("Internal error", zap.Error(err))
+		h.lgr.Info("Internal error", zap.Error(err))
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	body, err := json.Marshal(wds)
 	if err != nil {
-		h.l.Info("Internal error", zap.Error(err))
+		h.lgr.Info("Internal error", zap.Error(err))
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -49,7 +51,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	_, err = w.Write(body)
 	if err != nil {
-		h.l.Info("Internal error", zap.Error(err))
+		h.lgr.Info("Internal error", zap.Error(err))
 		http.Error(w, ht.ErrInternalError.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -1,4 +1,4 @@
-package withdraw
+package models
 
 import "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
 

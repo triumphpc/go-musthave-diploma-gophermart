@@ -1,18 +1,16 @@
 package balance
 
 import (
-	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
-	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
+	"github.com/stretchr/testify/mock"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
+	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage/mocks"
+	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
+	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,24 +32,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 	}
 
 	type server struct {
-		path string
-		usr  user.User
+		path     string
+		withAuth bool
 	}
-
-	lgr, err := logger.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-	storage := &mocks.MockStorage{}
-
-	usr := user.User{
-		UserID:    1,
-		Withdrawn: 100,
-		Points:    100,
-	}
-
-	regHandler := registration.New(lgr, storage)
-	handler := New(lgr, storage)
 
 	tests := []struct {
 		name    string
@@ -61,8 +44,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		server  server
 	}{
 		{
-			name:    "Check balance #1",
-			handler: handler,
+			name: "Check balance",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/balance",
@@ -77,25 +59,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:    "Check balance #2",
-			handler: regHandler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/register",
-				body:   "{\n    \"login\": \"login\",\n    \"password\": \"password123\"\n} ",
-			},
-			want: want{
-				code:        http.StatusOK,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/register",
-				usr:  usr,
-			},
-		},
-		{
-			name:    "Check balance #3",
-			handler: handler,
+			name: "Check balance",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/balance",
@@ -107,8 +71,8 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				response:    "{\"current\":100,\"withdrawn\":100}",
 			},
 			server: server{
-				path: "/api/user/balance",
-				usr:  usr,
+				path:     "/api/user/balance",
+				withAuth: true,
 			},
 		},
 	}
@@ -121,23 +85,40 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				r = nil
 			}
 
-			fmt.Println(r)
+			storage := mocks2.Storage{}
+			req := httptest.NewRequest(tt.request.method, tt.request.target, r)
 
-			request := httptest.NewRequest(tt.request.method, tt.request.target, r)
+			if tt.server.withAuth {
+				cookie := &http.Cookie{
+					Name:  ht.CookieUserIDName,
+					Value: "test",
+					Path:  "/",
+				}
+				req.AddCookie(cookie)
+
+				storage.
+					On("UserByToken", mock.Anything, mock.Anything).Return(
+					models.User{
+						UserID:    1,
+						Withdrawn: 100,
+						Points:    100,
+					}, nil)
+			}
+
+			handler := New(zap.NewNop(), &storage)
 
 			// Create new recorder
 			w := httptest.NewRecorder()
 			// Init handler
 			rtr := mux.NewRouter()
-			rtr.Handle(tt.server.path, tt.handler)
+			rtr.Handle(tt.server.path, handler)
 
 			h := conveyor.Conveyor(
 				rtr,
-				mocks2.NewMock(lgr, storage, tt.server.usr).CheckAuth,
 			)
 
 			// Create server
-			h.ServeHTTP(w, request)
+			h.ServeHTTP(w, req)
 			res := w.Result()
 
 			// Check code

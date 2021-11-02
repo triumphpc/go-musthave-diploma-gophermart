@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/streadway/amqp"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	"go.uber.org/zap"
@@ -79,7 +79,7 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 
 	group, currentCtx := errgroup.WithContext(ctx)
 	// chan for check order
-	inputCh := make(chan order.Order, 1000)
+	inputCh := make(chan models.Order, 1000)
 	defer close(inputCh)
 
 	for i := 0; i < runtime.NumCPU(); i++ {
@@ -113,7 +113,7 @@ func (b *RMQBroker) Run(ctx context.Context) error {
 }
 
 // Push order id in queue
-func (b *RMQBroker) Push(ctx context.Context, order order.Order) error {
+func (b *RMQBroker) Push(ctx context.Context, order models.Order) error {
 	body, err := json.Marshal(order)
 	if err != nil {
 		return err

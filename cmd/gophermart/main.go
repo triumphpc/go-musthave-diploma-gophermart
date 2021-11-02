@@ -10,7 +10,6 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/withdrawal"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/compressor"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
 	"go.uber.org/zap"
@@ -105,7 +104,6 @@ func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker
 		Handler: conveyor.Conveyor(
 			rtr,
 			compressor.New(lgr).Gzip,
-			authchecker.New(lgr, stg).CheckAuth,
 		),
 	}
 	// Run server

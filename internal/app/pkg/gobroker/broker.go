@@ -2,7 +2,7 @@ package gobroker
 
 import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	"go.uber.org/zap"
@@ -44,7 +44,7 @@ func (b *GoBroker) add(task Task) error {
 func (b *GoBroker) Run(ctx context.Context) error {
 	group, currentCtx := errgroup.WithContext(ctx)
 	// chan for check order
-	inputCh := make(chan order.Order, 1000)
+	inputCh := make(chan models.Order, 1000)
 	defer close(inputCh)
 
 	for i := range b.workers {
@@ -80,7 +80,7 @@ func (b *GoBroker) Run(ctx context.Context) error {
 }
 
 // Push new check for order
-func (b *GoBroker) Push(ctx context.Context, order order.Order) error {
+func (b *GoBroker) Push(ctx context.Context, order models.Order) error {
 	b.lgr.Info("Push order id", zap.Int("id", order.Code))
 	// Add to check pool
 	err := b.add(func() error {

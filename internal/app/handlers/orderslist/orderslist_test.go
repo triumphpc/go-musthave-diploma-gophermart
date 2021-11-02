@@ -1,26 +1,21 @@
 package orderslist
 
 import (
-	"context"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/order"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
-	order2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
-	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
-	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
+	mods "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
+	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage/mocks"
+	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
+	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHandler_ServeHTTP(t *testing.T) {
@@ -35,41 +30,13 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		target string
 		body   string
 		path   string
+		test   int
 	}
 
 	type server struct {
-		path string
-		usr  user.User
+		path     string
+		withAuth bool
 	}
-
-	lgr, err := logger.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-	storage := &mocks.MockStorage{}
-	broker := &mocks4.QueueBroker{}
-
-	broker.On("Push", mock.MatchedBy(func(input order2.Order) bool {
-		// no implement
-		return true
-	})).Return(func(input order2.Order) error {
-		return nil
-	}, nil)
-
-	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
-		// no implement
-		return true
-	})).Return(func(ctx context.Context) error {
-		return nil
-	}, nil)
-
-	usr := user.User{
-		UserID: 1,
-	}
-
-	orderHandler := order.New(lgr, storage, broker)
-	regHandler := registration.New(lgr, storage)
-	handler := New(lgr, storage)
 
 	tests := []struct {
 		name    string
@@ -79,87 +46,54 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		server  server
 	}{
 		{
-			name:    "Check order list #1",
-			handler: handler,
+			name: "Check order list",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/orders",
 				body:   "",
+				test:   0,
 			},
 			want: want{
 				code:        http.StatusUnauthorized,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
+				path:     "/api/user/orders",
+				withAuth: false,
 			},
 		},
 		{
-			name:    "Check order list #2",
-			handler: regHandler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/register",
-				body:   "{\n    \"login\": \"login\",\n    \"password\": \"password123\"\n} ",
-			},
-			want: want{
-				code:        http.StatusOK,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/register",
-				usr:  usr,
-			},
-		},
-		{
-			name:    "Check order list #3",
-			handler: handler,
+			name: "Check order list",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/orders",
 				body:   "",
+				test:   1,
 			},
 			want: want{
 				code:        http.StatusNoContent,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 		{
-			name:    "Check order list #4",
-			handler: orderHandler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/orders",
-				body:   "12345674",
-			},
-			want: want{
-				code:        http.StatusAccepted,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
-			},
-		},
-		{
-			name:    "Check order list #5",
-			handler: handler,
+			name: "Check order list",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/orders",
 				body:   "",
+				test:   2,
 			},
 			want: want{
 				code:        http.StatusOK,
 				contentType: "application/json; charset=utf-8",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 	}
@@ -172,21 +106,50 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				r = nil
 			}
 
-			request := httptest.NewRequest(tt.request.method, tt.request.target, r)
+			storage := mocks2.Storage{}
+			req := httptest.NewRequest(tt.request.method, tt.request.target, r)
+
+			if tt.server.withAuth {
+				cookie := &http.Cookie{
+					Name:  ht.CookieUserIDName,
+					Value: "test",
+					Path:  "/",
+				}
+				req.AddCookie(cookie)
+
+				var orders []mods.Order
+
+				var userOrder mods.Order
+				userOrder.UploadedAt = jsontime.JSONTime(time.Now())
+				userOrder.Accrual = 30
+				userOrder.Code = 12345
+				userOrder.CheckStatus = "PROCESSED"
+				orders = append(orders, userOrder)
+
+				storage.
+					On("UserByToken", mock.Anything, mock.Anything).Return(
+					mods.User{
+						Login:  "test",
+						UserID: 123,
+					}, nil).
+					On("Orders", mock.Anything, mock.MatchedBy(func(userID int) bool {
+						return tt.request.test == 1
+					})).Return([]mods.Order{}, nil).
+					On("Orders", mock.Anything, mock.MatchedBy(func(userID int) bool {
+						return userID == 123 && tt.request.test == 2
+					})).Return(orders, nil)
+			}
+
+			handler := New(zap.NewNop(), &storage)
 
 			// Create new recorder
 			w := httptest.NewRecorder()
 			// Init handler
 			rtr := mux.NewRouter()
-			rtr.Handle(tt.server.path, tt.handler)
-
-			h := conveyor.Conveyor(
-				rtr,
-				mocks2.NewMock(lgr, storage, tt.server.usr).CheckAuth,
-			)
+			rtr.Handle(tt.server.path, handler)
 
 			// Create server
-			h.ServeHTTP(w, request)
+			rtr.ServeHTTP(w, req)
 			res := w.Result()
 
 			// Check code

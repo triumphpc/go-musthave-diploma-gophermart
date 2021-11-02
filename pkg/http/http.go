@@ -26,12 +26,6 @@ var ErrNotAuth = errors.New("not auth")
 // CookieUserIDName cookie name
 const CookieUserIDName = "user_id"
 
-// CtxVar custom type for ctx
-type CtxVar string
-
-// CtxUser define context name
-var CtxUser CtxVar = "ctx_user"
-
 // ParseJSONReq parse JSON request and convert to struct by point
 func ParseJSONReq(r *http.Request, s interface{}) error {
 	if r.Body == http.NoBody {

@@ -2,20 +2,18 @@ package order
 
 import (
 	"context"
+	"database/sql"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/registration"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg/mocks"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/logger"
-	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/authchecker/mocks"
+	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage/mocks"
+	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
+	"go.uber.org/zap"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,24 +32,20 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		target string
 		body   string
 		path   string
+		test   int
 	}
 
 	type server struct {
-		path string
-		usr  user.User
+		path     string
+		withAuth bool
 	}
 
-	lgr, err := logger.New()
-	if err != nil {
-		log.Fatal(err)
-	}
-	stg := &mocks.MockStorage{}
 	broker := &mocks4.QueueBroker{}
 
-	broker.On("Push", mock.MatchedBy(func(input order.Order) bool {
+	broker.On("Push", mock.MatchedBy(func(input models.Order) bool {
 		// no implement
 		return true
-	})).Return(func(input order.Order) error {
+	})).Return(func(input models.Order) error {
 		return nil
 	}, nil)
 
@@ -62,27 +56,6 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		return nil
 	}, nil)
 
-	handler := Handler{
-		ctx: context.Background(),
-		lgr: lgr,
-		stg: stg,
-		bkr: broker,
-	}
-
-	regHandler := registration.New(lgr, stg)
-
-	usr := user.User{
-		UserID: 1,
-	}
-
-	usr2 := user.User{
-		UserID: 2,
-	}
-
-	usr3 := user.User{
-		UserID: 3,
-	}
-
 	tests := []struct {
 		name    string
 		want    want
@@ -91,25 +64,23 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		server  server
 	}{
 		{
-			name:    "Check order #1",
-			handler: regHandler,
+			name: "Check order",
 			request: request{
 				method: http.MethodPost,
-				target: "/api/user/register",
-				body:   "{\n    \"login\": \"login\",\n    \"password\": \"password123\"\n} ",
+				target: "/api/user/orders",
+				body:   "",
 			},
 			want: want{
-				code:        http.StatusOK,
+				code:        http.StatusUnauthorized,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/register",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: false,
 			},
 		},
 		{
-			name:    "Check order #2",
-			handler: handler,
+			name: "Check order",
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/orders",
@@ -120,13 +91,12 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 		{
-			name:    "Check order #3",
-			handler: handler,
+			name: "Check order",
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/orders",
@@ -137,110 +107,42 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 		{
-			name:    "Check order #4",
-			handler: handler,
+			name: "Check order",
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/orders",
 				body:   "12345674",
+				test:   1,
 			},
 			want: want{
 				code:        http.StatusOK,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 		{
-			name:    "Check order #5",
-			handler: regHandler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/register",
-				body:   "{\n    \"login\": \"login2\",\n    \"password\": \"password1234\"\n} ",
-			},
-			want: want{
-				code:        http.StatusOK,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/register",
-				usr:  usr2,
-			},
-		},
-		{
-			name:    "Check order #6",
-			handler: handler,
+			name: "Check order",
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/orders",
 				body:   "12345674",
+				test:   2,
 			},
 			want: want{
 				code:        http.StatusConflict,
 				contentType: "",
 			},
 			server: server{
-				path: "/api/user/orders",
-				usr:  usr2,
-			},
-		},
-		{
-			name:    "Check order #7",
-			handler: handler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/orders",
-				body:   "12345674",
-			},
-			want: want{
-				code:        http.StatusConflict,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/orders",
-				usr:  usr3,
-			},
-		},
-		{
-			name:    "Check order #8",
-			handler: handler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/orders",
-				body:   "79927398713",
-			},
-			want: want{
-				code:        http.StatusAccepted,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/orders",
-				usr:  usr3,
-			},
-		},
-		{
-			name:    "Check order #9",
-			handler: handler,
-			request: request{
-				method: http.MethodPost,
-				target: "/api/user/orders",
-				body:   "79927398713",
-			},
-			want: want{
-				code:        http.StatusOK,
-				contentType: "",
-			},
-			server: server{
-				path: "/api/user/orders",
-				usr:  usr3,
+				path:     "/api/user/orders",
+				withAuth: true,
 			},
 		},
 	}
@@ -253,21 +155,67 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				r = nil
 			}
 
-			request := httptest.NewRequest(tt.request.method, tt.request.target, r)
+			storage := mocks2.Storage{}
+			req := httptest.NewRequest(tt.request.method, tt.request.target, r)
+
+			if tt.server.withAuth {
+				cookie := &http.Cookie{
+					Name:  ht.CookieUserIDName,
+					Value: "test",
+					Path:  "/",
+				}
+				req.AddCookie(cookie)
+
+				storage.
+					On("UserByToken", mock.Anything, mock.Anything).Return(
+					models.User{
+						UserID:    1,
+						Withdrawn: 100,
+						Points:    100,
+					}, nil).
+					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
+						return code == 12345674 && tt.request.test == 0
+					})).Return(models.Order{
+					Code:   12345674,
+					UserID: 123,
+				}, sql.ErrNoRows).
+					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
+						return code == 12345674 && tt.request.test == 1
+					})).Return(models.Order{
+					Code:   12345674,
+					UserID: 1,
+				}, nil).
+					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
+						return code == 12345674 && tt.request.test == 2
+					})).Return(models.Order{
+					Code:   12345674,
+					UserID: 12345,
+				}, nil).
+					On("PutOrder", mock.Anything, mock.MatchedBy(func(ord models.Order) bool {
+						return ord.Code == 12345674
+					})).Return(nil)
+
+			}
+
+			handler := Handler{
+				ctx: context.Background(),
+				lgr: zap.NewNop(),
+				stg: &storage,
+				bkr: broker,
+			}
 
 			// Create new recorder
 			w := httptest.NewRecorder()
 			// Init handler
 			rtr := mux.NewRouter()
-			rtr.Handle(tt.server.path, tt.handler)
+			rtr.Handle(tt.server.path, handler)
 
 			h := conveyor.Conveyor(
 				rtr,
-				mocks2.NewMock(lgr, stg, tt.server.usr).CheckAuth,
 			)
 
 			// Create server
-			h.ServeHTTP(w, request)
+			h.ServeHTTP(w, req)
 			res := w.Result()
 
 			// Check code

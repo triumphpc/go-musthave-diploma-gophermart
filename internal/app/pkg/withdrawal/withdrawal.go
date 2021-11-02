@@ -2,7 +2,7 @@ package withdrawal
 
 import (
 	"context"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"go.uber.org/zap"
 	"time"
@@ -31,7 +31,7 @@ func Run(ctx context.Context, lgr *zap.Logger, stg storage.Storage) error {
 				// Some abstract implement for confirm withdraw
 				// It's a sample only
 
-				ord := order.Order{
+				ord := models.Order{
 					UserID: wd.UserID,
 					ID:     wd.OrderID,
 				}

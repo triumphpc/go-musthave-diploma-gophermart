@@ -5,7 +5,7 @@ package broker
 import (
 	"context"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/gobroker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/rabbit"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
@@ -17,7 +17,7 @@ type QueueBroker interface {
 	// Run broker
 	Run(ctx context.Context) error
 	// Push order id for check in broker
-	Push(ctx context.Context, order order.Order) error
+	Push(ctx context.Context, order models.Order) error
 }
 
 // Init project message broker

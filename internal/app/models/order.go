@@ -1,6 +1,4 @@
-// Package order consist types and consist for order model
-// @author Sergey Vrulin (aka Alex Versus) 2021
-package order
+package models
 
 import "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
 

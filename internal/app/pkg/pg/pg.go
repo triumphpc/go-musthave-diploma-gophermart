@@ -9,9 +9,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/withdraw"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/migrations"
 	"go.uber.org/zap"
 	"time"
@@ -161,7 +159,7 @@ func (s *Pg) Close() {
 }
 
 // Register register new user in storage
-func (s *Pg) Register(ctx context.Context, user user.User) error {
+func (s *Pg) Register(ctx context.Context, user models.User) error {
 	if _, err := s.db.ExecContext(ctx, sqlNewUser, user.Login, user.HexPassword()); err != nil {
 		if err, ok := err.(*pq.Error); ok {
 			if err.Code == pgerrcode.UniqueViolation {
@@ -175,20 +173,20 @@ func (s *Pg) Register(ctx context.Context, user user.User) error {
 }
 
 // HasAuth search user in storage
-func (s *Pg) HasAuth(ctx context.Context, u user.User) (bool, error) {
+func (s *Pg) HasAuth(ctx context.Context, u models.User) (bool, error) {
 	return s.rowExists(ctx, sqlGetUser, u.Login, u.HexPassword())
 }
 
 // SetToken update token to user
-func (s *Pg) SetToken(ctx context.Context, u user.User, t string) error {
+func (s *Pg) SetToken(ctx context.Context, u models.User, t string) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdateToken, t, u.Login)
 
 	return err
 }
 
 // UserByToken check if token exist
-func (s *Pg) UserByToken(ctx context.Context, t string) (user.User, error) {
-	var usr user.User
+func (s *Pg) UserByToken(ctx context.Context, t string) (models.User, error) {
+	var usr models.User
 	err := s.db.QueryRowContext(ctx, sqlCheckToken, t).Scan(&usr.UserID, &usr.Points, &usr.Withdrawn)
 	if err != nil {
 		return usr, ErrUserNotFound
@@ -198,8 +196,8 @@ func (s *Pg) UserByToken(ctx context.Context, t string) (user.User, error) {
 }
 
 // PutOrder put order in storage
-func (s *Pg) PutOrder(ctx context.Context, ord order.Order) error {
-	if _, err := s.db.ExecContext(ctx, sqlNewOrder, ord.UserID, ord.Code, order.NEW); err != nil {
+func (s *Pg) PutOrder(ctx context.Context, ord models.Order) error {
+	if _, err := s.db.ExecContext(ctx, sqlNewOrder, ord.UserID, ord.Code, models.NEW); err != nil {
 		if err, ok := err.(*pq.Error); ok {
 			if err.Code == pgerrcode.UniqueViolation {
 				return ErrOrderAlreadyExist
@@ -214,7 +212,7 @@ func (s *Pg) PutOrder(ctx context.Context, ord order.Order) error {
 // SetStatus update status to order by code
 func (s *Pg) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
 	// If it's ended status
-	if status == order.PROCESSED || status == order.INVALID {
+	if status == models.PROCESSED || status == models.INVALID {
 		_, err := s.db.ExecContext(ctx, sqlUpdateDoneStatus, status, points, orderCode, points)
 
 		return err
@@ -250,7 +248,7 @@ func (s *Pg) AddPoints(ctx context.Context, userID int, points int, orderCode in
 
 	defer tx.Rollback()
 
-	if err := s.SetStatus(ctx, orderCode, order.PROCESSED, 0, points); err != nil {
+	if err := s.SetStatus(ctx, orderCode, models.PROCESSED, 0, points); err != nil {
 		return err
 	}
 
@@ -263,8 +261,8 @@ func (s *Pg) AddPoints(ctx context.Context, userID int, points int, orderCode in
 }
 
 // Orders get user orders list
-func (s *Pg) Orders(ctx context.Context, userID int) ([]order.Order, error) {
-	var orders []order.Order
+func (s *Pg) Orders(ctx context.Context, userID int) ([]models.Order, error) {
+	var orders []models.Order
 	rows, err := s.db.QueryContext(ctx, sqlGetOrders, userID)
 	if err != nil {
 		return orders, err
@@ -276,7 +274,7 @@ func (s *Pg) Orders(ctx context.Context, userID int) ([]order.Order, error) {
 	}
 
 	for rows.Next() {
-		var userOrder order.Order
+		var userOrder models.Order
 		err = rows.Scan(&userOrder.Code, &userOrder.CheckStatus, &userOrder.UploadedAt, &userOrder.Accrual)
 		if err != nil {
 			return orders, err
@@ -287,8 +285,8 @@ func (s *Pg) Orders(ctx context.Context, userID int) ([]order.Order, error) {
 }
 
 // OrderByCode get order by code
-func (s *Pg) OrderByCode(ctx context.Context, code int) (order.Order, error) {
-	var userOrder order.Order
+func (s *Pg) OrderByCode(ctx context.Context, code int) (models.Order, error) {
+	var userOrder models.Order
 	err := s.db.QueryRowContext(ctx, sqlGetOrder, code).Scan(
 		&userOrder.ID,
 		&userOrder.Code,
@@ -303,8 +301,8 @@ func (s *Pg) OrderByCode(ctx context.Context, code int) (order.Order, error) {
 }
 
 // OrdersForCheck get chunk for check in loyalty machine
-func (s *Pg) OrdersForCheck(ctx context.Context) ([]order.Order, error) {
-	var orders []order.Order
+func (s *Pg) OrdersForCheck(ctx context.Context) ([]models.Order, error) {
+	var orders []models.Order
 	rows, err := s.db.QueryContext(ctx, sqlGetOrdersForCheck)
 	if err != nil {
 		return orders, err
@@ -316,7 +314,7 @@ func (s *Pg) OrdersForCheck(ctx context.Context) ([]order.Order, error) {
 	}
 
 	for rows.Next() {
-		var userOrder order.Order
+		var userOrder models.Order
 		err = rows.Scan(&userOrder.Code, &userOrder.UserID, &userOrder.Attempts)
 		if err != nil {
 			return orders, err
@@ -328,7 +326,7 @@ func (s *Pg) OrdersForCheck(ctx context.Context) ([]order.Order, error) {
 }
 
 // AddWithdraw add withdraw to queue
-func (s *Pg) AddWithdraw(ctx context.Context, ord order.Order, points float64) error {
+func (s *Pg) AddWithdraw(ctx context.Context, ord models.Order, points float64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -353,7 +351,7 @@ func (s *Pg) AddWithdraw(ctx context.Context, ord order.Order, points float64) e
 }
 
 // Withdraw points from user account
-func (s *Pg) Withdraw(ctx context.Context, ord order.Order, points float64) error {
+func (s *Pg) Withdraw(ctx context.Context, ord models.Order, points float64) error {
 	_, err := s.db.ExecContext(ctx, sqlWithdrawUpdate, ord.UserID, ord.ID, points)
 	if err != nil {
 		return err
@@ -363,8 +361,8 @@ func (s *Pg) Withdraw(ctx context.Context, ord order.Order, points float64) erro
 }
 
 // ActiveWithdrawals get active withdrawals from list
-func (s *Pg) ActiveWithdrawals(ctx context.Context) ([]withdraw.Withdraw, error) {
-	var wds []withdraw.Withdraw
+func (s *Pg) ActiveWithdrawals(ctx context.Context) ([]models.Withdraw, error) {
+	var wds []models.Withdraw
 	rows, err := s.db.QueryContext(ctx, sqlGetWithdrawals)
 	if err != nil {
 		return wds, err
@@ -376,7 +374,7 @@ func (s *Pg) ActiveWithdrawals(ctx context.Context) ([]withdraw.Withdraw, error)
 	}
 
 	for rows.Next() {
-		var wd withdraw.Withdraw
+		var wd models.Withdraw
 		err = rows.Scan(&wd.UserID, &wd.OrderID, &wd.Sum)
 		if err != nil {
 			return wds, err
@@ -388,8 +386,8 @@ func (s *Pg) ActiveWithdrawals(ctx context.Context) ([]withdraw.Withdraw, error)
 }
 
 // WithdrawsByUserID get list of user withdrawals
-func (s *Pg) WithdrawsByUserID(ctx context.Context, userID int) ([]withdraw.Withdraw, error) {
-	var wds []withdraw.Withdraw
+func (s *Pg) WithdrawsByUserID(ctx context.Context, userID int) ([]models.Withdraw, error) {
+	var wds []models.Withdraw
 	rows, err := s.db.QueryContext(ctx, sqlGetWithdrawalsByUserID, userID)
 	if err != nil {
 		return wds, err
@@ -401,7 +399,7 @@ func (s *Pg) WithdrawsByUserID(ctx context.Context, userID int) ([]withdraw.With
 	}
 
 	for rows.Next() {
-		var wd withdraw.Withdraw
+		var wd models.Withdraw
 		err = rows.Scan(&wd.Sum, &wd.OrderID, &wd.ProcessedAt, &wd.Status)
 		if err != nil {
 			return wds, err

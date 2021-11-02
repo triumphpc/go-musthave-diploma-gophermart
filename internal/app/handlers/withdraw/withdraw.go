@@ -4,7 +4,7 @@ package withdraw
 
 import (
 	"encoding/json"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
@@ -14,8 +14,8 @@ import (
 )
 
 type Handler struct {
-	l *zap.Logger
-	s storage.Storage
+	lgr *zap.Logger
+	stg storage.Storage
 }
 
 // New constructor
@@ -30,8 +30,10 @@ type request struct {
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	usr := r.Context().Value(ht.CtxUser)
-	currentUser, _ := usr.(user.User)
+	var currentUser models.User
+	if token, err := r.Cookie(ht.CookieUserIDName); err == nil {
+		currentUser, _ = h.stg.UserByToken(r.Context(), token.Value)
+	}
 
 	if currentUser.UserID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)
@@ -62,7 +64,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := h.s.OrderByCode(r.Context(), orderID)
+	order, err := h.stg.OrderByCode(r.Context(), orderID)
 	if err != nil {
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
@@ -74,9 +76,9 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.l.Info("Add to withdraw", zap.Reflect("order", order))
-	if err := h.s.AddWithdraw(r.Context(), order, req.Sum); err != nil {
-		h.l.Error("Don't add withdraw", zap.Error(err))
+	h.lgr.Info("Add to withdraw", zap.Reflect("order", order))
+	if err := h.stg.AddWithdraw(r.Context(), order, req.Sum); err != nil {
+		h.lgr.Error("Don't add withdraw", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}

@@ -4,7 +4,7 @@ package balance
 
 import (
 	"encoding/json"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
@@ -22,8 +22,10 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 }
 
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	usr := r.Context().Value(ht.CtxUser)
-	currentUser, _ := usr.(user.User)
+	var currentUser models.User
+	if token, err := r.Cookie(ht.CookieUserIDName); err == nil {
+		currentUser, _ = h.s.UserByToken(r.Context(), token.Value)
+	}
 
 	if currentUser.UserID == 0 {
 		http.Error(w, ht.ErrNotAuth.Error(), http.StatusUnauthorized)

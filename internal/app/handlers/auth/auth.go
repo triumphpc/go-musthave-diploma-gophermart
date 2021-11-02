@@ -4,7 +4,7 @@ package auth
 
 import (
 	"errors"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/user"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
@@ -26,7 +26,7 @@ func New(l *zap.Logger, s storage.Storage) *Handler {
 
 // HasAuth user
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	usr := &user.User{}
+	usr := &models.User{}
 	if err := ht.ParseJSONReq(r, usr); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

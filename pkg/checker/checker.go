@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models/order"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -16,7 +16,7 @@ import (
 )
 
 // Check order status from loyal machine
-func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder order.Order) error {
+func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Storage, userOrder models.Order) error {
 	lgr.Info("Check order", zap.Reflect("order", userOrder))
 
 	url := ent.AccrualSystemAddress + "/api/orders/" + strconv.Itoa(userOrder.Code)
@@ -38,7 +38,7 @@ func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Stora
 		if err != nil {
 			return err
 		}
-		return stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, timeout, 0)
+		return stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, timeout, 0)
 
 	case http.StatusOK:
 		body, err := ioutil.ReadAll(resp.Body)
@@ -46,7 +46,7 @@ func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Stora
 			return err
 		}
 
-		ord := order.LoyalOrder{}
+		ord := models.LoyalOrder{}
 		if err := json.Unmarshal(body, &ord); err != nil {
 			return err
 		}
@@ -55,25 +55,25 @@ func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Stora
 
 		// Check current status for order
 		switch ord.Status {
-		case order.LoyalRegistered:
-			if err := stg.SetStatus(ctx, userOrder.Code, order.NEW, 1, 0); err != nil {
+		case models.LoyalRegistered:
+			if err := stg.SetStatus(ctx, userOrder.Code, models.NEW, 1, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order registered", zap.Int("order code", userOrder.Code))
 
-		case order.LoyalInvalid:
-			if err := stg.SetStatus(ctx, userOrder.Code, order.INVALID, 0, 0); err != nil {
+		case models.LoyalInvalid:
+			if err := stg.SetStatus(ctx, userOrder.Code, models.INVALID, 0, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
 
-		case order.LoyalProcessing:
-			if err := stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, 1, 0); err != nil {
+		case models.LoyalProcessing:
+			if err := stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, 1, 0); err != nil {
 				return err
 			}
 			lgr.Info("Order is processing", zap.Int("order code", userOrder.Code))
 
-		case order.LoyalProcessed:
+		case models.LoyalProcessed:
 			if err := stg.AddPoints(ctx, userOrder.UserID, ord.Accrual, userOrder.Code); err != nil {
 				return err
 			}
@@ -89,9 +89,9 @@ func Check(ctx context.Context, lgr *zap.Logger, ent *env.Env, stg storage.Stora
 }
 
 // badResponseCheck work with bad response from loyal machine
-func badResponseCheck(ctx context.Context, userOrder order.Order, stg storage.Storage, lgr *zap.Logger) error {
+func badResponseCheck(ctx context.Context, userOrder models.Order, stg storage.Storage, lgr *zap.Logger) error {
 	if userOrder.Attempts > 5 {
-		if err := stg.SetStatus(ctx, userOrder.Code, order.INVALID, 0, 0); err != nil {
+		if err := stg.SetStatus(ctx, userOrder.Code, models.INVALID, 0, 0); err != nil {
 			return err
 		}
 		lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
@@ -99,14 +99,14 @@ func badResponseCheck(ctx context.Context, userOrder order.Order, stg storage.St
 
 	}
 	currentTimeout := userOrder.Attempts * 60
-	if err := stg.SetStatus(ctx, userOrder.Code, order.PROCESSING, currentTimeout, 0); err != nil {
+	if err := stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, currentTimeout, 0); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Repeater run get orders for check iteratively
-func Repeater(ctx context.Context, input chan<- order.Order, lgr *zap.Logger, stg storage.Storage) func() error {
+func Repeater(ctx context.Context, input chan<- models.Order, lgr *zap.Logger, stg storage.Storage) func() error {
 	return func() error {
 		lgr.Info("Run Repeater")
 		defer lgr.Info("Out Repeater")
@@ -138,7 +138,7 @@ func Repeater(ctx context.Context, input chan<- order.Order, lgr *zap.Logger, st
 }
 
 // Pusher run check orders in goroutines
-func Pusher(ctx context.Context, input <-chan order.Order, lgr *zap.Logger, ent *env.Env, stg storage.Storage, workID int) func() error {
+func Pusher(ctx context.Context, input <-chan models.Order, lgr *zap.Logger, ent *env.Env, stg storage.Storage, workID int) func() error {
 	return func() error {
 		lgr.Info("Run pusher", zap.Int("work id", workID))
 		defer lgr.Info("Out pushed", zap.Int("work id", workID))
@@ -160,7 +160,7 @@ func Pusher(ctx context.Context, input <-chan order.Order, lgr *zap.Logger, ent 
 
 // Handle task from queue
 func Handle(ctx context.Context, body []byte, lgr *zap.Logger, ent *env.Env, stg storage.Storage) error {
-	var userOrder order.Order
+	var userOrder models.Order
 	if err := json.Unmarshal(body, &userOrder); err != nil {
 		return err
 	}
