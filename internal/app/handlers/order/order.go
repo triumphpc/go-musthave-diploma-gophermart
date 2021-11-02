@@ -17,11 +17,11 @@ type Handler struct {
 	ctx context.Context
 	lgr *zap.Logger
 	stg storage.Storage
-	bkr broker.QueueBroker
+	bkr broker.Publisher
 }
 
 // New constructor
-func New(l *zap.Logger, s storage.Storage, c broker.QueueBroker) *Handler {
+func New(l *zap.Logger, s storage.Storage, c broker.Publisher) *Handler {
 	return &Handler{lgr: l, stg: s, bkr: c}
 }
 
@@ -80,7 +80,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Push in broker for check
-	err = h.bkr.Push(r.Context(), order)
+	err = h.bkr.Push(order)
 	if err != nil {
 		h.lgr.Info("Error handler", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)

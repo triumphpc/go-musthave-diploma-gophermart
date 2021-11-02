@@ -5,7 +5,9 @@ import (
 	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/goproducer"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/rabbit"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/withdrawal"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/routes"
@@ -41,15 +43,17 @@ func main() {
 		lgr.Fatal("Pg init error", zap.Error(err))
 	}
 
-	// Broker
-	bkr := broker.Init(lgr, stg, ent)
+	// Publisher
+	pub := initBrokerPublisher(lgr, ent, stg)
+	// Subscriber
+	sub := broker.NewConsumer(lgr, ent, stg)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		if err := bkr.Run(ctx); err != nil {
+		if err := pub.Run(ctx, sub); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				lgr.Error("Broker returned error", zap.Error(err))
 				cancel()
@@ -84,7 +88,7 @@ func main() {
 		cancel()
 	}()
 
-	if err := serve(ctx, stg, lgr, bkr, ent); err != nil {
+	if err := serve(ctx, stg, lgr, pub, ent); err != nil {
 		lgr.Error("failed to serve:", zap.Error(err))
 	}
 
@@ -94,7 +98,7 @@ func main() {
 }
 
 // serve implementation
-func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker.QueueBroker, ent *env.Env) (err error) {
+func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker.Publisher, ent *env.Env) (err error) {
 	// Routes
 	rtr := routes.Router(stg, lgr, bkr)
 	http.Handle("/", rtr)
@@ -134,4 +138,13 @@ func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker
 	lgr.Info("Server exited properly")
 
 	return
+}
+
+// initBrokerPublisher broker publisher by config
+func initBrokerPublisher(lgr *zap.Logger, ent *env.Env, stg storage.Storage) broker.Publisher {
+	if ent.BrokerType == env.BrokerTypeRabbitMQ {
+		return rabbit.NewProducer(lgr, ent, stg)
+	}
+
+	return goproducer.NewProducer(lgr, ent, stg)
 }

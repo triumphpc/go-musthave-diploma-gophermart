@@ -16,7 +16,7 @@ import (
 )
 
 // Router define routes priority
-func Router(s storage.Storage, l *zap.Logger, c broker.QueueBroker) *mux.Router {
+func Router(s storage.Storage, l *zap.Logger, c broker.Publisher) *mux.Router {
 	rtr := mux.NewRouter()
 	// Registration users
 	rtr.Handle("/api/user/register", registration.New(l, s)).Methods(http.MethodPost)

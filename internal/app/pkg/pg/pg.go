@@ -214,7 +214,6 @@ func (s *Pg) SetStatus(ctx context.Context, orderCode int, status int, timeout i
 	// If it's ended status
 	if status == models.PROCESSED || status == models.INVALID {
 		_, err := s.db.ExecContext(ctx, sqlUpdateDoneStatus, status, points, orderCode, points)
-
 		return err
 	}
 
