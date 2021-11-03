@@ -40,14 +40,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		withAuth bool
 	}
 
-	broker := &mocks4.QueueBroker{}
+	broker := &mocks4.Publisher{}
 
-	broker.On("Push", mock.MatchedBy(func(input models.Order) bool {
-		// no implement
-		return true
-	})).Return(func(input models.Order) error {
-		return nil
-	}, nil)
+	broker.On("Push", mock.Anything).Return(nil)
 
 	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
 		// no implement
@@ -198,10 +193,9 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			}
 
 			handler := Handler{
-				ctx: context.Background(),
 				lgr: zap.NewNop(),
 				stg: &storage,
-				bkr: broker,
+				pub: broker,
 			}
 
 			// Create new recorder

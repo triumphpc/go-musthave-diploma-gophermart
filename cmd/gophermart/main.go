@@ -98,9 +98,9 @@ func main() {
 }
 
 // serve implementation
-func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, bkr broker.Publisher, ent *env.Env) (err error) {
+func serve(ctx context.Context, stg storage.Storage, lgr *zap.Logger, pub broker.Publisher, ent *env.Env) (err error) {
 	// Routes
-	rtr := routes.Router(stg, lgr, bkr)
+	rtr := routes.Router(stg, lgr, pub)
 	http.Handle("/", rtr)
 	// Server
 	srv := &http.Server{

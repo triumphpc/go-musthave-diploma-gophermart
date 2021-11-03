@@ -8,18 +8,24 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
+	"runtime"
 	"strconv"
 )
+
+// Task for producer
+type Task = func(chan<- models.Order) error
 
 // Publisher define main methods for check order queue
 type Publisher interface {
 	// Run producer and subscribe
 	Run(ctx context.Context, sub Subscriber) error
-	// Push order id for check in producer
-	Push(order models.Order) error
+	// Push order task
+	Push(task Task) error
 }
 
 // Subscriber define methods for consumers
@@ -35,6 +41,63 @@ type Consumer struct {
 	lgr *zap.Logger
 	ent *env.Env
 	stg storage.Storage
+}
+
+// Producer describe publisher model
+type Producer struct {
+	Lgr     *zap.Logger
+	Tasks   chan Task
+	Workers []chan int
+	Ent     *env.Env
+	Stg     storage.Storage
+}
+
+// Push task in producer
+func (p *Producer) Push(task Task) error {
+	p.Tasks <- task
+	return nil
+}
+
+// Size num of workers
+var Size int = runtime.NumCPU()
+
+// Run checker for orders
+func (p *Producer) Run(ctx context.Context, sub Subscriber) error {
+	group, currentCtx := errgroup.WithContext(ctx)
+	// chan for check order
+	inCh := make(chan models.Order, 1000)
+	defer close(inCh)
+
+	for i := range p.Workers {
+		p.Workers[i] = make(chan int, 1)
+		workID := i
+		f := func() error {
+			p.Lgr.Info("Worker start", zap.Int("id", workID))
+			for {
+				select {
+				case task := <-p.Tasks:
+					p.Lgr.Info("Worker take task", zap.Int("id", workID))
+
+					if err := task(inCh); err != nil {
+						p.Lgr.Error("Task executed with error", zap.Error(err))
+						return err
+					}
+
+				case <-currentCtx.Done():
+					p.Lgr.Info("Worker out by context", zap.Int("id", workID))
+					return ctx.Err()
+				}
+			}
+		}
+		group.Go(f)
+		// Create subscriptions
+		group.Go(sub.Subscribe(currentCtx, inCh, workID))
+	}
+	p.Lgr.Info("GoBroker pool ran with", zap.Int(" thread of number", len(p.Workers)))
+	// Run getter list for check
+	group.Go(checker.Repeater(currentCtx, inCh, p.Lgr, p.Stg))
+
+	return group.Wait()
 }
 
 // NewConsumer create new consumer
@@ -56,7 +119,7 @@ func (c *Consumer) Subscribe(ctx context.Context, input <-chan models.Order, wor
 			select {
 			// How ofter check in storage
 			case ord := <-input:
-				c.lgr.Info("Get order from chan", zap.Reflect("worker id", workID))
+				c.lgr.Info("Get order from chan", zap.Reflect("order", ord), zap.Reflect("worker id", workID))
 				if err := c.Check(ctx, ord); err != nil {
 					return err
 				}

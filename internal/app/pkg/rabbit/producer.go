@@ -8,56 +8,63 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
-	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"runtime"
 )
 
 // Producer run and check task for order
 type Producer struct {
-	lgr     *zap.Logger
-	ent     *env.Env
-	stg     storage.Storage
+	pub broker.Producer
+	// main chan
 	channel *amqp.Channel
-	queue   amqp.Queue
-	sub     broker.Subscriber
+	// queue for publisher
+	queue amqp.Queue
 }
 
 // queueName for order check
 const queueName = "orders"
 
 // NewProducer construct
-func NewProducer(logger *zap.Logger, ent *env.Env, stg storage.Storage) *Producer {
+func NewProducer(lgr *zap.Logger, ent *env.Env, stg storage.Storage) *Producer {
 	return &Producer{
-		lgr: logger,
-		ent: ent,
-		stg: stg,
+		pub: broker.Producer{
+			Lgr:     lgr,
+			Tasks:   make(chan broker.Task, 1000),
+			Workers: make([]chan int, broker.Size),
+			Ent:     ent,
+			Stg:     stg,
+		},
 	}
 }
 
 // Run broker
 func (p *Producer) Run(ctx context.Context, sub broker.Subscriber) error {
-	conn, err := amqp.Dial(p.ent.BrokerHost)
+	conn, err := amqp.Dial(p.pub.Ent.BrokerHost)
 	if err != nil {
 		return err
 	}
-
-	// Set active subscriber
-	p.sub = sub
 
 	errChan := conn.NotifyClose(make(chan *amqp.Error, 1))
 	p.channel, err = conn.Channel()
 	if err != nil {
 		return err
 	}
+
 	defer func() {
-		p.lgr.Info("Close rabbit connection")
+		p.pub.Lgr.Info("Close rabbit connection")
 		conn.Close()
 		p.channel.Close()
-
 	}()
 
+	// Bag for errors from rabbit
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		err = <-errChan
+		p.pub.Lgr.Error("Error from connection", zap.Error(err))
+		cancel()
+	}()
+
+	// Make chains
 	if p.queue, err = p.channel.QueueDeclare(
 		queueName,
 		true,
@@ -82,66 +89,79 @@ func (p *Producer) Run(ctx context.Context, sub broker.Subscriber) error {
 		return err
 	}
 
+	// Run readers for rabbit
 	group, currentCtx := errgroup.WithContext(ctx)
-	// chan for check order
-	inputCh := make(chan models.Order, 1000)
-	defer close(inputCh)
 
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for i := range p.pub.Workers {
 		workID := i
 		f := func() error {
+			p.pub.Lgr.Info("Rabbit worker start", zap.Int("id", workID))
 			for {
 				select {
 				case msg := <-msgChan:
-					if err := p.task(ctx, msg); err != nil {
-						p.lgr.Error("Task executed with error", zap.Error(err))
+					var ord models.Order
+					if err := json.Unmarshal(msg.Body, &ord); err != nil {
 						return err
 					}
-
+					// Push in broker for check
+					task := func(inCh chan<- models.Order) error {
+						inCh <- ord
+						return nil
+					}
+					if err := p.pub.Push(task); err != nil {
+						return err
+					}
 				case <-currentCtx.Done():
-					return ctx.Err()
-				case err := <-errChan:
-					p.lgr.Error("Error from connection", zap.Error(err))
+					p.pub.Lgr.Info("Rabbit worker out by context", zap.Int("id", workID))
 					return ctx.Err()
 				}
 			}
 		}
 		group.Go(f)
-		// Run workers for check
-		group.Go(p.sub.Subscribe(currentCtx, inputCh, workID))
 	}
-	// Run getter list for check
-	group.Go(checker.Repeater(currentCtx, inputCh, p.lgr, p.stg))
+
+	// Run general broker
+	if err := p.pub.Run(ctx, sub); err != nil {
+		return err
+	}
 
 	return group.Wait()
 }
 
-// task execute task from chan
-func (p *Producer) task(ctx context.Context, msg amqp.Delivery) error {
-	var userOrder models.Order
-	if err := json.Unmarshal(msg.Body, &userOrder); err != nil {
-		return err
-	}
+// Push task in producer
+// Custom implementation for rabbit format
+func (p *Producer) Push(task broker.Task) error {
+	inCh := make(chan models.Order)
 
-	if err := p.sub.Check(ctx, userOrder); err != nil {
-		return err
-	}
-	return nil
-}
+	go func() {
+		err := func() error {
+			ord := <-inCh
+			p.pub.Lgr.Info("Push order in rabbit", zap.Reflect("order", ord))
+			body, err := json.Marshal(ord)
+			if err != nil {
+				return err
+			}
 
-// Push order id in queue
-func (p *Producer) Push(order models.Order) error {
-	body, err := json.Marshal(order)
+			// to rabbit
+			return p.channel.Publish(
+				"",
+				p.queue.Name,
+				false,
+				false,
+				amqp.Publishing{
+					Body: body,
+				})
+
+		}()
+		if err != nil {
+			p.pub.Lgr.Error("in push rabbit", zap.Error(err))
+		}
+	}()
+
+	err := task(inCh)
 	if err != nil {
 		return err
 	}
 
-	return p.channel.Publish(
-		"",
-		p.queue.Name,
-		false,
-		false,
-		amqp.Publishing{
-			Body: body,
-		})
+	return nil
 }

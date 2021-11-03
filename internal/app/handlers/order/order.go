@@ -1,7 +1,6 @@
 package order
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
@@ -14,15 +13,14 @@ import (
 )
 
 type Handler struct {
-	ctx context.Context
 	lgr *zap.Logger
 	stg storage.Storage
-	bkr broker.Publisher
+	pub broker.Publisher
 }
 
 // New constructor
-func New(l *zap.Logger, s storage.Storage, c broker.Publisher) *Handler {
-	return &Handler{lgr: l, stg: s, bkr: c}
+func New(lgr *zap.Logger, stg storage.Storage, pub broker.Publisher) *Handler {
+	return &Handler{lgr: lgr, stg: stg, pub: pub}
 }
 
 // Register order
@@ -80,7 +78,11 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Push in broker for check
-	err = h.bkr.Push(order)
+	task := func(inCh chan<- models.Order) error {
+		inCh <- order
+		return nil
+	}
+	err = h.pub.Push(task)
 	if err != nil {
 		h.lgr.Info("Error handler", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
