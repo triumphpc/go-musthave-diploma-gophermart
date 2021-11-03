@@ -122,7 +122,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				var userOrder mods.Order
 				userOrder.UploadedAt = jsontime.JSONTime(time.Now())
 				userOrder.Accrual = 30
-				userOrder.Code = 12345
+				userOrder.Code = "12345"
 				userOrder.CheckStatus = "PROCESSED"
 				orders = append(orders, userOrder)
 

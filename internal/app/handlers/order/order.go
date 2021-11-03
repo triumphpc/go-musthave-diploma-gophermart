@@ -10,6 +10,7 @@ import (
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
 	"net/http"
+	"strconv"
 )
 
 type Handler struct {
@@ -63,7 +64,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.UserID = currentUser.UserID
-	order.Code = orderCode
+	order.Code = strconv.Itoa(orderCode)
 
 	// Create order
 	if err := h.stg.PutOrder(r.Context(), order); err != nil {

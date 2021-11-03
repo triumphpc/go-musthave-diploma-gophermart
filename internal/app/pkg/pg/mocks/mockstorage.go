@@ -9,6 +9,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/jsontime"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,7 @@ type MockStorage struct {
 	mock.Mock
 	storage    map[string]models.User
 	tokens     map[string]string
-	orders     map[int]int
+	orders     map[int]string
 	ordercodes map[int]int
 	userpoints map[int]int
 }
@@ -72,7 +73,7 @@ func (_m *MockStorage) UserByToken(ctx context.Context, token string) (models.Us
 // PutOrder put order in process for check status
 func (_m *MockStorage) PutOrder(ctx context.Context, ord models.Order) error {
 	if _m.orders == nil {
-		_m.orders = make(map[int]int)
+		_m.orders = make(map[int]string)
 	}
 	for _, v := range _m.orders {
 		if v == ord.Code {
@@ -87,10 +88,10 @@ func (_m *MockStorage) PutOrder(ctx context.Context, ord models.Order) error {
 // HasOrder check order in mock storage
 func (_m *MockStorage) HasOrder(ctx context.Context, userID int, code int) bool {
 	if _m.orders == nil {
-		_m.orders = make(map[int]int)
+		_m.orders = make(map[int]string)
 	}
 	for k, v := range _m.orders {
-		if v == code && k == userID {
+		if v == strconv.Itoa(code) && k == userID {
 			return true
 		}
 	}
@@ -138,8 +139,8 @@ func (_m *MockStorage) OrderByCode(ctx context.Context, code int) (models.Order,
 	userOrder := models.Order{}
 
 	for k, v := range _m.orders {
-		if v == code {
-			userOrder.Code = code
+		if v == strconv.Itoa(code) {
+			userOrder.Code = strconv.Itoa(code)
 			userOrder.UserID = k
 			return userOrder, nil
 		}

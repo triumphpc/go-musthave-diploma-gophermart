@@ -27,8 +27,8 @@ type LoyalOrder struct {
 
 // Order user list
 type Order struct {
-	ID               int               `json:"-"`
-	Code             int               `json:"number"`
+	ID               string            `json:"-"`
+	Code             string            `json:"number"`
 	UserID           int               `json:"-"`
 	CheckStatus      string            `json:"status"`
 	Accrual          float64           `json:"accrual,omitempty"`

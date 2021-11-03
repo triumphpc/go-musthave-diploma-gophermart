@@ -171,23 +171,23 @@ func TestHandler_ServeHTTP(t *testing.T) {
 					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
 						return code == 12345674 && tt.request.test == 0
 					})).Return(models.Order{
-					Code:   12345674,
+					Code:   "12345674",
 					UserID: 123,
 				}, sql.ErrNoRows).
 					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
 						return code == 12345674 && tt.request.test == 1
 					})).Return(models.Order{
-					Code:   12345674,
+					Code:   "12345674",
 					UserID: 1,
 				}, nil).
 					On("OrderByCode", mock.Anything, mock.MatchedBy(func(code int) bool {
 						return code == 12345674 && tt.request.test == 2
 					})).Return(models.Order{
-					Code:   12345674,
+					Code:   "12345674",
 					UserID: 12345,
 				}, nil).
 					On("PutOrder", mock.Anything, mock.MatchedBy(func(ord models.Order) bool {
-						return ord.Code == 12345674
+						return ord.Code == "12345674"
 					})).Return(nil)
 
 			}

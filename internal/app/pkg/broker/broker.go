@@ -135,7 +135,7 @@ func (c *Consumer) Subscribe(ctx context.Context, input <-chan models.Order, wor
 func (c *Consumer) Check(ctx context.Context, userOrder models.Order) error {
 	c.lgr.Info("Check order", zap.Reflect("order", userOrder))
 
-	url := c.ent.AccrualSystemAddress + "/api/orders/" + strconv.Itoa(userOrder.Code)
+	url := c.ent.AccrualSystemAddress + "/api/orders/" + userOrder.Code
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
@@ -154,7 +154,11 @@ func (c *Consumer) Check(ctx context.Context, userOrder models.Order) error {
 		if err != nil {
 			return err
 		}
-		return c.stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, timeout, 0)
+		orderID, err := strconv.Atoi(userOrder.Code)
+		if err != nil {
+			return err
+		}
+		return c.stg.SetStatus(ctx, orderID, models.PROCESSING, timeout, 0)
 
 	case http.StatusOK:
 		body, err := ioutil.ReadAll(resp.Body)
@@ -169,28 +173,32 @@ func (c *Consumer) Check(ctx context.Context, userOrder models.Order) error {
 
 		c.lgr.Info("Response from loyal machine", zap.Reflect("order", ord))
 
+		orderID, err := strconv.Atoi(userOrder.Code)
+		if err != nil {
+			return err
+		}
 		// Check current status for order
 		switch ord.Status {
 		case models.LoyalRegistered:
-			if err := c.stg.SetStatus(ctx, userOrder.Code, models.NEW, 1, 0); err != nil {
+			if err := c.stg.SetStatus(ctx, orderID, models.NEW, 1, 0); err != nil {
 				return err
 			}
-			c.lgr.Info("Order registered", zap.Int("order code", userOrder.Code))
+			c.lgr.Info("Order registered", zap.Int("order code", orderID))
 
 		case models.LoyalInvalid:
-			if err := c.stg.SetStatus(ctx, userOrder.Code, models.INVALID, 0, 0); err != nil {
+			if err := c.stg.SetStatus(ctx, orderID, models.INVALID, 0, 0); err != nil {
 				return err
 			}
-			c.lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
+			c.lgr.Info("Order invalid status", zap.Int("order code", orderID))
 
 		case models.LoyalProcessing:
-			if err := c.stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, 1, 0); err != nil {
+			if err := c.stg.SetStatus(ctx, orderID, models.PROCESSING, 1, 0); err != nil {
 				return err
 			}
-			c.lgr.Info("Order is processing", zap.Int("order code", userOrder.Code))
+			c.lgr.Info("Order is processing", zap.Int("order code", orderID))
 
 		case models.LoyalProcessed:
-			if err := c.stg.AddPoints(ctx, userOrder.UserID, ord.Accrual, userOrder.Code); err != nil {
+			if err := c.stg.AddPoints(ctx, userOrder.UserID, ord.Accrual, orderID); err != nil {
 				return err
 			}
 			c.lgr.Info("Order is processed", zap.Reflect("order", ord))
@@ -206,16 +214,20 @@ func (c *Consumer) Check(ctx context.Context, userOrder models.Order) error {
 
 // badResponseCheck work with bad response from loyal machine
 func (c *Consumer) badResponseCheck(ctx context.Context, userOrder models.Order) error {
+	orderID, err := strconv.Atoi(userOrder.Code)
+	if err != nil {
+		return err
+	}
 	if userOrder.Attempts > 5 {
-		if err := c.stg.SetStatus(ctx, userOrder.Code, models.INVALID, 0, 0); err != nil {
+		if err := c.stg.SetStatus(ctx, orderID, models.INVALID, 0, 0); err != nil {
 			return err
 		}
-		c.lgr.Info("Order invalid status", zap.Int("order code", userOrder.Code))
+		c.lgr.Info("Order invalid status", zap.Int("order code", orderID))
 		return nil
 
 	}
 	currentTimeout := userOrder.Attempts * 60
-	if err := c.stg.SetStatus(ctx, userOrder.Code, models.PROCESSING, currentTimeout, 0); err != nil {
+	if err := c.stg.SetStatus(ctx, orderID, models.PROCESSING, currentTimeout, 0); err != nil {
 		return err
 	}
 	return nil

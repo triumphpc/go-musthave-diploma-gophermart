@@ -28,6 +28,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		target string
 		body   string
 		path   string
+		test   int
 	}
 
 	type server struct {
@@ -42,11 +43,12 @@ func TestHandler_ServeHTTP(t *testing.T) {
 		server  server
 	}{
 		{
-			name: "Check withdraw list #1",
+			name: "Check withdraw list",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/balance/withdrawals",
 				body:   "",
+				test:   0,
 			},
 			want: want{
 				code:        http.StatusUnauthorized,
@@ -58,15 +60,33 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name: "Check withdraw list #2",
+			name: "Check withdraw list",
 			request: request{
 				method: http.MethodGet,
 				target: "/api/user/balance/withdrawals",
 				body:   "",
+				test:   0,
 			},
 			want: want{
 				code:        http.StatusOK,
 				contentType: "application/json; charset=utf-8",
+			},
+			server: server{
+				path:     "/api/user/balance/withdrawals",
+				withAuth: true,
+			},
+		},
+		{
+			name: "Check withdraw list",
+			request: request{
+				method: http.MethodGet,
+				target: "/api/user/balance/withdrawals",
+				body:   "",
+				test:   2,
+			},
+			want: want{
+				code:        http.StatusNoContent,
+				contentType: "",
 			},
 			server: server{
 				path:     "/api/user/balance/withdrawals",
@@ -99,13 +119,20 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				var wd mod.Withdraw
 				wds = append(wds, wd)
 
+				var nullWds []mod.Withdraw
+
 				storage.
 					On("UserByToken", mock.Anything, mock.Anything).Return(
 					mod.User{
 						Login:  "test",
 						UserID: 123,
 					}, nil).
-					On("WithdrawsByUserID", mock.Anything, mock.Anything).Return(wds, nil)
+					On("WithdrawsByUserID", mock.Anything, mock.MatchedBy(func(userID int) bool {
+						return tt.request.test == 0
+					})).Return(wds, nil).
+					On("WithdrawsByUserID", mock.Anything, mock.MatchedBy(func(userID int) bool {
+						return tt.request.test == 2
+					})).Return(nullWds, nil)
 			}
 
 			handler := New(zap.NewNop(), &storage)
