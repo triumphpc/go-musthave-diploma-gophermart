@@ -4,7 +4,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"github.com/theplant/luhn"
+	"fmt"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/encoder"
 	"io/ioutil"
 	"net/http"
@@ -70,10 +70,14 @@ func IsValidOrder(r *http.Request) (int, error) {
 	if err != nil {
 		return id, ErrBadRequest
 	}
+
+	fmt.Println(id)
 	// Check for Luhn
-	if !luhn.Valid(id) {
-		return id, ErrInvalidOrder
-	}
+
+	// @todo temp disable
+	//if !luhn.Valid(id) {
+	//	return id, ErrInvalidOrder
+	//}
 
 	return id, nil
 }
