@@ -183,7 +183,7 @@ func (c *Checker) Check(ctx context.Context, usrOrd models.Order) error {
 	}
 	defer resp.Body.Close()
 
-	c.lgr.Info("LM code", zap.Int("code", resp.StatusCode))
+	c.lgr.Info("Accrual code", zap.Int("code", resp.StatusCode))
 
 	switch resp.StatusCode {
 	// to many connects strategy

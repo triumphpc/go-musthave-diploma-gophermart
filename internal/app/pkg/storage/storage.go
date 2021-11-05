@@ -19,9 +19,9 @@ type Storage interface {
 	// PutOrder put order in process for check status
 	PutOrder(ctx context.Context, ord models.Order) error
 	// SetStatus update status for order
-	SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error
+	SetStatus(ctx context.Context, orderCode int, status int, timeout int, points float64) error
 	// AddPoints add points to user
-	AddPoints(ctx context.Context, userID int, points int, orderCode int) error
+	AddPoints(ctx context.Context, userID int, points float64, orderCode int) error
 	// Orders get all orders by user
 	Orders(ctx context.Context, userID int) ([]models.Order, error)
 	// OrderByCode get order by code

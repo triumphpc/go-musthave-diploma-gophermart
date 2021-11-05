@@ -210,7 +210,7 @@ func (s *Pg) PutOrder(ctx context.Context, ord models.Order) error {
 }
 
 // SetStatus update status to order by code
-func (s *Pg) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
+func (s *Pg) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points float64) error {
 	// If it's ended status
 	if status == models.PROCESSED || status == models.INVALID {
 		_, err := s.db.ExecContext(ctx, sqlUpdateDoneStatus, status, points, orderCode, points)
@@ -239,7 +239,7 @@ func (s *Pg) rowExists(ctx context.Context, query string, args ...interface{}) (
 }
 
 // AddPoints add points to user and done check
-func (s *Pg) AddPoints(ctx context.Context, userID int, points int, orderCode int) error {
+func (s *Pg) AddPoints(ctx context.Context, userID int, points float64, orderCode int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
