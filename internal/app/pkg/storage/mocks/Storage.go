@@ -38,11 +38,11 @@ func (_m *Storage) ActiveWithdrawals(ctx context.Context) ([]models.Withdraw, er
 }
 
 // AddPoints provides a mock function with given fields: ctx, userID, points, orderCode
-func (_m *Storage) AddPoints(ctx context.Context, userID int, points int, orderCode int) error {
+func (_m *Storage) AddPoints(ctx context.Context, userID int, points float64, orderCode int) error {
 	ret := _m.Called(ctx, userID, points, orderCode)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, int, int) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, int, float64, int) error); ok {
 		r0 = rf(ctx, userID, points, orderCode)
 	} else {
 		r0 = ret.Error(0)
@@ -187,11 +187,11 @@ func (_m *Storage) Register(ctx context.Context, user models.User) error {
 }
 
 // SetStatus provides a mock function with given fields: ctx, orderCode, status, timeout, points
-func (_m *Storage) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
+func (_m *Storage) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points float64) error {
 	ret := _m.Called(ctx, orderCode, status, timeout, points)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, int, int, int) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, int, int, int, float64) error); ok {
 		r0 = rf(ctx, orderCode, status, timeout, points)
 	} else {
 		r0 = ret.Error(0)

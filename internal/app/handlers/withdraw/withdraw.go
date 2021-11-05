@@ -76,7 +76,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.lgr.Info("Add to withdraw", zap.Reflect("order", order))
+	h.lgr.Info("Add to withdraw", zap.Reflect("order", order), zap.Reflect("request", req))
 	if err := h.stg.AddWithdraw(r.Context(), order, req.Sum); err != nil {
 		h.lgr.Error("Don't add withdraw", zap.Error(err))
 		http.Error(w, "", http.StatusInternalServerError)

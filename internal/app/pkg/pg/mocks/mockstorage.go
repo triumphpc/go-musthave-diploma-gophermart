@@ -20,7 +20,7 @@ type MockStorage struct {
 	tokens     map[string]string
 	orders     map[int]string
 	ordercodes map[int]int
-	userpoints map[int]int
+	userpoints map[int]float64
 }
 
 // Auth provides a mock function with given fields: u
@@ -100,7 +100,7 @@ func (_m *MockStorage) HasOrder(ctx context.Context, userID int, code int) bool 
 }
 
 // SetStatus update status for order
-func (_m *MockStorage) SetStatus(ctx context.Context, orderCode int, status int, timeout int, points int) error {
+func (_m *MockStorage) SetStatus(ctx context.Context, orderCode int, status, timeout int, points float64) error {
 	if _m.ordercodes == nil {
 		_m.ordercodes = make(map[int]int)
 	}
@@ -109,7 +109,7 @@ func (_m *MockStorage) SetStatus(ctx context.Context, orderCode int, status int,
 }
 
 // AddPoints add points to user
-func (_m *MockStorage) AddPoints(ctx context.Context, userID int, points int, orderCode int) error {
+func (_m *MockStorage) AddPoints(ctx context.Context, userID int, points float64, orderCode int) error {
 	_m.SetStatus(ctx, orderCode, models.PROCESSED, 0, 20)
 	_m.userpoints[userID] += points
 
