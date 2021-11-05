@@ -23,7 +23,7 @@ func main() {
 		odr := models.LoyalOrder{
 			Order:   number,
 			Status:  "REGISTERED",
-			Accrual: rand.Intn(100),
+			Accrual: 729.98,
 		}
 
 		min := 0
@@ -66,7 +66,7 @@ func main() {
 	}).Methods(http.MethodGet)
 
 	s := &http.Server{
-		Addr:    ":8081",
+		Addr:    ":8080",
 		Handler: rtr,
 	}
 	log.Fatal(s.ListenAndServe())
