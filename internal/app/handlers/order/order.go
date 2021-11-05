@@ -1,12 +1,14 @@
 package order
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/pg"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"go.uber.org/zap"
 	"net/http"
@@ -17,11 +19,12 @@ type Handler struct {
 	lgr *zap.Logger
 	stg storage.Storage
 	pub broker.Publisher
+	ckr checker.Controller
 }
 
 // New constructor
-func New(lgr *zap.Logger, stg storage.Storage, pub broker.Publisher) *Handler {
-	return &Handler{lgr: lgr, stg: stg, pub: pub}
+func New(lgr *zap.Logger, stg storage.Storage, pub broker.Publisher, ckr checker.Controller) *Handler {
+	return &Handler{lgr, stg, pub, ckr}
 }
 
 // Register order
@@ -78,12 +81,9 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Push in broker for check
-	task := func(inCh chan<- models.Order) error {
-		inCh <- order
-		return nil
-	}
-	err = h.pub.Push(task)
+	task := h.ckr.PrepareTask(context.Background(), order)
+	err = h.pub.Publish(task)
+
 	if err != nil {
 		h.lgr.Info("Error handler", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)

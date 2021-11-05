@@ -1,7 +1,6 @@
 package order
 
 import (
-	"context"
 	"database/sql"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -9,6 +8,7 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
 	mocks4 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker/mocks"
 	mocks2 "github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage/mocks"
+	checker2 "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker/mocks"
 	ht "github.com/triumphpc/go-musthave-diploma-gophermart/pkg/http"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/middlewares/conveyor"
 	"go.uber.org/zap"
@@ -42,14 +42,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 	broker := &mocks4.Publisher{}
 
-	broker.On("Push", mock.Anything).Return(nil)
-
-	broker.On("Run", mock.MatchedBy(func(ctx context.Context) bool {
-		// no implement
-		return true
-	})).Return(func(ctx context.Context) error {
-		return nil
-	}, nil)
+	broker.On("Publish", mock.Anything).Return(nil)
 
 	tests := []struct {
 		name    string
@@ -152,6 +145,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 
 			storage := mocks2.Storage{}
 			req := httptest.NewRequest(tt.request.method, tt.request.target, r)
+			checker := checker2.Controller{}
 
 			if tt.server.withAuth {
 				cookie := &http.Cookie{
@@ -190,12 +184,16 @@ func TestHandler_ServeHTTP(t *testing.T) {
 						return ord.Code == "12345674"
 					})).Return(nil)
 
+				checker.
+					On("PrepareTask", mock.Anything, mock.Anything).Return(func() error { return nil })
+
 			}
 
 			handler := Handler{
 				lgr: zap.NewNop(),
 				stg: &storage,
 				pub: broker,
+				ckr: &checker,
 			}
 
 			// Create new recorder

@@ -11,19 +11,20 @@ import (
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/handlers/withdrawallist"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/broker"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
+	"github.com/triumphpc/go-musthave-diploma-gophermart/pkg/checker"
 	"go.uber.org/zap"
 	"net/http"
 )
 
 // Router define routes priority
-func Router(stg storage.Storage, lgr *zap.Logger, pub broker.Publisher) *mux.Router {
+func Router(lgr *zap.Logger, stg storage.Storage, pub broker.Publisher, ckr checker.Controller) *mux.Router {
 	rtr := mux.NewRouter()
 	// Registration users
 	rtr.Handle("/api/user/register", registration.New(lgr, stg)).Methods(http.MethodPost)
 	// HasAuth user
 	rtr.Handle("/api/user/login", auth.New(lgr, stg)).Methods(http.MethodPost)
 	// Order register
-	rtr.Handle("/api/user/orders", order.New(lgr, stg, pub)).Methods(http.MethodPost)
+	rtr.Handle("/api/user/orders", order.New(lgr, stg, pub, ckr)).Methods(http.MethodPost)
 	// Order list
 	rtr.Handle("/api/user/orders", orderslist.New(lgr, stg)).Methods(http.MethodGet)
 	// Get user balance
