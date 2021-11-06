@@ -74,8 +74,9 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Order for withdraw
 	order := models.Order{
-		Code: req.Order,
-		ID:   req.Order,
+		Code:   req.Order,
+		ID:     req.Order,
+		UserID: currentUser.UserID,
 	}
 
 	h.lgr.Info("Add to withdraw", zap.Reflect("order", order), zap.Reflect("request", req))
