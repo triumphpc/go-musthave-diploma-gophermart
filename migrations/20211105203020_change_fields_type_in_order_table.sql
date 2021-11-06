@@ -5,6 +5,8 @@ alter table orders alter column avail_for_withdraw type double precision using a
 
 alter table withdrawals alter column points type double precision using points::double precision;
 
+alter table withdrawals alter column order_id type varchar(100) using order_id::varchar(100);
+
 
 
 

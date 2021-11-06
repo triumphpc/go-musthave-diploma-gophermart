@@ -59,24 +59,23 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orderID, err := strconv.Atoi(req.Order)
+	_, err = strconv.Atoi(req.Order)
 	if err != nil {
 		h.lgr.Error("Can't convert orderID")
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
-	order, err := h.stg.OrderByCode(r.Context(), orderID)
-	if err != nil {
-		h.lgr.Error("Unknown orderID")
-		http.Error(w, "", http.StatusUnprocessableEntity)
+	// Has no points for withdraw in order
+	if currentUser.Points < req.Sum {
+		http.Error(w, "", http.StatusPaymentRequired)
 		return
 	}
 
-	// Has no points for withdraw in order
-	if order.AvailForWithdraw < req.Sum || currentUser.Points < req.Sum {
-		http.Error(w, "", http.StatusPaymentRequired)
-		return
+	// Order for withdraw
+	order := models.Order{
+		Code: req.Order,
+		ID:   req.Order,
 	}
 
 	h.lgr.Info("Add to withdraw", zap.Reflect("order", order), zap.Reflect("request", req))

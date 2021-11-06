@@ -341,11 +341,6 @@ func (s *Pg) AddWithdraw(ctx context.Context, ord models.Order, points float64) 
 		return err
 	}
 
-	_, err = s.db.ExecContext(ctx, sqlSubAvailPointsInOrder, points, ord.ID)
-	if err != nil {
-		return err
-	}
-
 	return tx.Commit()
 }
 
