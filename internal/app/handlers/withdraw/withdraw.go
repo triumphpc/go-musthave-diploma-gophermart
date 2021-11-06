@@ -42,6 +42,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var body []byte
 	if r.Body == http.NoBody {
+		h.lgr.Error("No body from request")
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
@@ -60,12 +61,14 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	orderID, err := strconv.Atoi(req.Order)
 	if err != nil {
+		h.lgr.Error("Can't convert orderID")
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
 
 	order, err := h.stg.OrderByCode(r.Context(), orderID)
 	if err != nil {
+		h.lgr.Error("Unknown orderID")
 		http.Error(w, "", http.StatusUnprocessableEntity)
 		return
 	}
