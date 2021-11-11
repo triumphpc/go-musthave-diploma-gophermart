@@ -43,7 +43,7 @@ func main() {
 		lgr.Fatal("Pg init error", zap.Error(err))
 	}
 	// Init publisher
-	pub := broker.NewProducer(lgr, ent, stg)
+	pub := broker.NewPublisher(lgr, ent, stg)
 
 	wg := sync.WaitGroup{}
 
@@ -180,7 +180,7 @@ func initSubscribers(ctx context.Context, pub broker.Publisher, lgr *zap.Logger,
 		workID := i
 		f := func() error {
 			// create new subscriber
-			sub := broker.NewConsumer(lgr, ent, stg)
+			sub := broker.NewSubscriber(lgr, ent, stg)
 			// subscribe in pub channel
 			if err := sub.Subscribe(currentCtx, pub.Channel(), workID); err != nil {
 				return err

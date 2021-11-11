@@ -29,7 +29,7 @@ type Controller interface {
 	// Check describe logic for check order status
 	Check(ctx context.Context, usrOrd models.Order) error
 	// PrepareTask describe mapping task for publisher
-	PrepareTask(ctx context.Context, ord models.Order) broker.Task
+	PrepareTask(ord models.Order) broker.Task
 	// RunListeners run listeners for producer
 	RunListeners(ctx context.Context, pub broker.Publisher) error
 }
@@ -84,7 +84,7 @@ func (c *Checker) RunListeners(ctx context.Context, pub broker.Publisher) error 
 					select {
 					case msg := <-c.mq.Get():
 						// Wrapper for task subscribers
-						task := func() error {
+						task := func(ctx context.Context) error {
 							var ord models.Order
 							if err := json.Unmarshal(msg.Body, &ord); err != nil {
 								return err
@@ -114,8 +114,8 @@ func (c *Checker) RunListeners(ctx context.Context, pub broker.Publisher) error 
 }
 
 // PrepareTask prepare task for current publisher
-func (c *Checker) PrepareTask(ctx context.Context, ord models.Order) broker.Task {
-	return func() error {
+func (c *Checker) PrepareTask(ord models.Order) broker.Task {
+	return func(ctx context.Context) error {
 		// if implement default broker
 		if c.ent.BrokerType == env.BrokerTypeGO {
 			return c.Check(ctx, ord)
@@ -160,7 +160,7 @@ func (c *Checker) Repeater(ctx context.Context, pub broker.Publisher) error {
 
 			for _, ord := range orders {
 				c.lgr.Info("Push order rto task", zap.Reflect("order", ord))
-				if err = pub.Publish(c.PrepareTask(ctx, ord)); err != nil {
+				if err = pub.Publish(c.PrepareTask(ord)); err != nil {
 					return err
 				}
 			}

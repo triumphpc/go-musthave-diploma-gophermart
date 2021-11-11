@@ -18,16 +18,16 @@ type Subscriber interface {
 	Subscribe(ctx context.Context, input <-chan Task, workID int) error
 }
 
-// Consumer describe subscriber model
-type Consumer struct {
+// SubscriberImpl describe subscriber model
+type SubscriberImpl struct {
 	lgr *zap.Logger
 	ent *env.Env
 	stg storage.Storage
 }
 
-// NewConsumer create new consumer
-func NewConsumer(lgr *zap.Logger, env *env.Env, stg storage.Storage) *Consumer {
-	return &Consumer{
+// NewSubscriber create new consumer
+func NewSubscriber(lgr *zap.Logger, env *env.Env, stg storage.Storage) *SubscriberImpl {
+	return &SubscriberImpl{
 		lgr: lgr,
 		ent: env,
 		stg: stg,
@@ -35,7 +35,7 @@ func NewConsumer(lgr *zap.Logger, env *env.Env, stg storage.Storage) *Consumer {
 }
 
 // Subscribe on channel
-func (c *Consumer) Subscribe(ctx context.Context, input <-chan Task, workID int) error {
+func (c *SubscriberImpl) Subscribe(ctx context.Context, input <-chan Task, workID int) error {
 	// Pusher run check orders in goroutines
 	c.lgr.Info("Subscribe", zap.Int("work id", workID))
 	defer c.lgr.Info("Unsubscribe", zap.Int("work id", workID))
@@ -44,7 +44,7 @@ func (c *Consumer) Subscribe(ctx context.Context, input <-chan Task, workID int)
 		select {
 		case task := <-input:
 			c.lgr.Info("Subscriber get task", zap.Int("worker id", workID))
-			if err := task(); err != nil {
+			if err := task(ctx); err != nil {
 				c.lgr.Error("Task executed with error", zap.Error(err))
 				return err
 			}

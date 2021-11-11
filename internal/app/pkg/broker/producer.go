@@ -6,13 +6,14 @@
 package broker
 
 import (
+	"context"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/env"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/pkg/storage"
 	"go.uber.org/zap"
 )
 
 // Task for producer
-type Task = func() error
+type Task = func(ctx context.Context) error
 
 // Publisher define main methods for check order queue
 type Publisher interface {
@@ -22,17 +23,17 @@ type Publisher interface {
 	Channel() <-chan Task
 }
 
-// Producer describe publisher model
-type Producer struct {
+// PublisherImpl describe publisher model
+type PublisherImpl struct {
 	lgr   *zap.Logger
 	tasks chan Task
 	ent   *env.Env
 	stg   storage.Storage
 }
 
-// NewProducer create new producer
-func NewProducer(lgr *zap.Logger, ent *env.Env, stg storage.Storage) *Producer {
-	return &Producer{
+// NewPublisher create new producer
+func NewPublisher(lgr *zap.Logger, ent *env.Env, stg storage.Storage) *PublisherImpl {
+	return &PublisherImpl{
 		lgr:   lgr,
 		ent:   ent,
 		stg:   stg,
@@ -41,12 +42,12 @@ func NewProducer(lgr *zap.Logger, ent *env.Env, stg storage.Storage) *Producer {
 }
 
 // Publish task by producer
-func (p *Producer) Publish(task Task) error {
+func (p *PublisherImpl) Publish(task Task) error {
 	p.tasks <- task
 	return nil
 }
 
 // Channel return active publisher chan
-func (p *Producer) Channel() <-chan Task {
+func (p *PublisherImpl) Channel() <-chan Task {
 	return p.tasks
 }

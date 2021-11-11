@@ -1,7 +1,6 @@
 package order
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"github.com/triumphpc/go-musthave-diploma-gophermart/internal/app/models"
@@ -81,7 +80,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := h.ckr.PrepareTask(context.Background(), order)
+	task := h.ckr.PrepareTask(order)
 	err = h.pub.Publish(task)
 
 	if err != nil {
