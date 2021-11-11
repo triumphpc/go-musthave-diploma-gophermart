@@ -79,7 +79,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 			request: request{
 				method: http.MethodPost,
 				target: "/api/user/balance/withdraw",
-				body:   "{\"order\": \"555\",\"sum\": 6\n}",
+				body:   "{\"order\": \"fd555\",\"sum\": 6\n}",
 			},
 			want: want{
 				code:        http.StatusUnprocessableEntity,
@@ -98,7 +98,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 				body:   "{\"order\": \"3\",\"sum\": 6\n}",
 			},
 			want: want{
-				code:        http.StatusUnprocessableEntity,
+				code:        http.StatusPaymentRequired,
 				contentType: "",
 			},
 			server: server{

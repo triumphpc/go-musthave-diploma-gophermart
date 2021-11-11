@@ -1,6 +1,7 @@
 package order
 
 import (
+	"context"
 	"database/sql"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -185,7 +186,7 @@ func TestHandler_ServeHTTP(t *testing.T) {
 					})).Return(nil)
 
 				checker.
-					On("PrepareTask", mock.Anything, mock.Anything).Return(func() error { return nil })
+					On("PrepareTask", mock.Anything).Return(func(ctx context.Context) error { return nil })
 
 			}
 

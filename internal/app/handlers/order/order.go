@@ -81,6 +81,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	task := h.ckr.PrepareTask(order)
+
 	err = h.pub.Publish(task)
 
 	if err != nil {

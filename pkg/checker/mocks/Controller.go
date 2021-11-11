@@ -31,16 +31,16 @@ func (_m *Controller) Check(ctx context.Context, usrOrd models.Order) error {
 	return r0
 }
 
-// PrepareTask provides a mock function with given fields: ctx, ord
-func (_m *Controller) PrepareTask(ctx context.Context, ord models.Order) func() error {
-	ret := _m.Called(ctx, ord)
+// PrepareTask provides a mock function with given fields: ord
+func (_m *Controller) PrepareTask(ord models.Order) func(context.Context) error {
+	ret := _m.Called(ord)
 
-	var r0 func() error
-	if rf, ok := ret.Get(0).(func(context.Context, models.Order) func() error); ok {
-		r0 = rf(ctx, ord)
+	var r0 func(context.Context) error
+	if rf, ok := ret.Get(0).(func(models.Order) func(context.Context) error); ok {
+		r0 = rf(ord)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(func() error)
+			r0 = ret.Get(0).(func(context.Context) error)
 		}
 	}
 
