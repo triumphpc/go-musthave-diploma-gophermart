@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  gofermart_service:
+    build:
+      context: ..
+      dockerfile: build/docker/go_service.dockerfile
+    command: ./main
+    ports:
+      - "8080:8080"
+    depends_on:
+      - gofermart_postgres_service
+      - gofermart_rabbitmq
+    environment:
+      - DATABASE_DSN=postgres://postgres:qwerty@gofermart_postgres_service:5432/postgres?sslmode=disable
+
+  # docker-compose up -d --build goose_exec_service - rebuild goose container
+  # docker-compose run --rm goose_exec_service create link_storage sql - create new migrations
+  goose_exec_service:
+    build:
+      context: ..
+      dockerfile: build/docker/goose_service_exec.dockerfile
+    depends_on:
+      - gofermart_postgres_service
+    environment:
+      - DBHOST=gofermart_postgres_service
+      - DBNAME=postgres
+      - DBUSER=postgres
+      - DBPASSWORD=qwerty
+      - DBSSL=disable
+    volumes:
+      - ../migrations:/migrations
+    entrypoint: [ "bash", "entrypoint_exec.sh" ]
+
+  gofermart_postgres_service:
+    restart: always
+    image: postgres:latest
+    container_name: postgres_db
+    environment:
+      - POSTGRES_PASSWORD=qwerty
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+    ports:
+      - "5432:5432"
+
+# docker-compose up -d --build gofermart_rabbitmq
+  gofermart_rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: 'rabbitmq'
+    ports:
+      - "5672:5672"
+      - "15672:15672"
